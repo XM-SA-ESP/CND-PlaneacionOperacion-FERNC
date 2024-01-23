@@ -1,0 +1,10 @@
+# Visual Studio
+.vs
+
+# Cache
+.pytest_cache
+__pycache__
+
+# coverage
+.coverage
+coverage.xml

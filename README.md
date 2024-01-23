@@ -1,20 +1,11 @@
 # Introduction 
-TODO: Give a short introduction of your project. Let this section explain the objectives or the motivation behind this project. 
+Este microservicio incluye los endpoints esenciales para obtener información para el cálculo de la **ENFIC** y la **EDA**. Estos endpoints son fundamentales para iniciar y gestionar el cálculo.
 
 # Getting Started
-TODO: Guide users through getting your code up and running on their own system. In this section you can talk about:
-1.	Installation process
-2.	Software dependencies
-3.	Latest releases
-4.	API references
+1.	**Descargar el Repositorio:** Clone el repositorio desde *Azure Git* a tu máquina local.
+2.	**Abrir el Proyecto:** Abre el proyecto utilizando tu IDE preferido, como Visual Studio o Visual Studio Code.
+3.	**Compilar y Restaurar Paquetes:** Ejecuta la compilación del proyecto para asegurarte de que todos los archivos necesarios estén en su lugar. ????
+4.	**Configurar Variables de Entorno:** las variables de encontro se encuentran en el archivo **appsetting.Development.json?**
 
 # Build and Test
 TODO: Describe and show how to build your code and run the tests. 
-
-# Contribute
-TODO: Explain how other users and developers can contribute to make your code better. 
-
-If you want to learn more about creating good readme files then refer the following [guidelines](https://docs.microsoft.com/en-us/azure/devops/repos/git/create-a-readme?view=azure-devops). You can also seek inspiration from the below readme files:
-- [ASP.NET Core](https://github.com/aspnet/Home)
-- [Visual Studio Code](https://github.com/Microsoft/vscode)
-- [Chakra Core](https://github.com/Microsoft/ChakraCore)
