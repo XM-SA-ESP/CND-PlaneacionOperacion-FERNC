@@ -1,11 +1,18 @@
 # Introduction 
-Este microservicio incluye los endpoints esenciales para obtener información para el cálculo de la **ENFIC** y la **EDA**. Estos endpoints son fundamentales para iniciar y gestionar el cálculo.
+Este microservicio incluye los endpoints esenciales para obtener información para el cálculo de la **ENFICC** y la **EDA**. Estos endpoints son fundamentales para iniciar y gestionar el cálculo.
 
-# Getting Started
-1.	**Descargar el Repositorio:** Clone el repositorio desde *Azure Git* a tu máquina local.
-2.	**Abrir el Proyecto:** Abre el proyecto utilizando tu IDE preferido, como Visual Studio o Visual Studio Code.
-3.	**Compilar y Restaurar Paquetes:** Ejecuta la compilación del proyecto para asegurarte de que todos los archivos necesarios estén en su lugar. ????
-4.	**Configurar Variables de Entorno:** las variables de encontro se encuentran en el archivo **appsetting.Development.json?**
+# Proposito/Objetivo.: 
+Proyecto requerido para las resoluciones CREG 101 006 de 2023 para plantas eólicas y CREG 101 007 de 2023 para plantas solares fotovoltaicas, donde se define la metodología para determinar la energía firme para el cargo por confiabilidad y donde se regulan otras disposiciones.
 
-# Build and Test
-TODO: Describe and show how to build your code and run the tests. 
+#Funcionalidades/Features:
+1. Calcular ENFICC para plantas solares.
+2. Calcular EDA para plantas eólicas.
+3. Producción energetida horaria para plantas solares y eólicas.
+
+# Forma de uso/Ejemplos.
+1. **Descargar el Repositorio:** Clone el repositorio a su máquina local.
+2. **Abrir el Proyecto:** Abra el proyecto utilizando su IDE preferido, como por ejemplos Visual Studio Code.
+3. **Compilar y Restaurar Paquetes:** Ejecuta la compilación del proyecto para asegurarte de que todos los archivos necesarios estén en su lugar, usando los comandos (pip install -r .\requirements.txt) y (run .\main.py) ubicado en la carpeta ".\XM_FERNC_API".
+4. **Configurar Variables de Entorno:** las variables de encontro se encuentran en el archivo **.env**
+
+# Licencia. (Url de donde esta la licencia).
