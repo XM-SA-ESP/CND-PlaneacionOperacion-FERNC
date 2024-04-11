@@ -1,0 +1,1 @@
+COLUMN_EDA = "EDA [kWh/día]"

@@ -1,0 +1,544 @@
+{
+	"IdConexionWs": "iu3h428o3h4u2374hy",
+	"IdTransaccion": "irhgf",
+    "IdAplicacion": "oawihd",
+	"ParametrosTransversales": {
+		"ZonaHoraria": "America/Bogota",
+		"Altitud": 2632.1,
+		"Albedo": 0.17,
+		"L": 14.6,
+		"NombrePlanta": "Nombre de la planta ",
+		"Cen": 11.0,
+		"Ihf": 87.0,
+		"Latitud": 4.6454,
+		"Longitud": -74.06604,
+		"Kpc": 0.0,
+		"Kt": 0.0,
+		"Kin": 0.0,
+		"InformacionMedida": false,
+		"Ppi": 11.0
+	},
+	"ParametrosConfiguracion": {
+		"GrupoInversores": [
+			{
+				"ParametrosInversor": {
+					"CurvaPDCVSPACEnVDCMax": [
+						{
+							"Id": 1.0,
+							"XVdcmax": 1.0,
+							"YVdcmax": 1.0
+						},
+						{
+							"Id": 2.0,
+							"XVdcmax": 1.0,
+							"YVdcmax": 1.0
+						},
+						{
+							"Id": 3.0,
+							"XVdcmax": 1.0,
+							"YVdcmax": 1.0
+						},
+						{
+							"Id": 4.0,
+							"XVdcmax": 1.0,
+							"YVdcmax": 1.0
+						},
+						{
+							"Id": 5.0,
+							"XVdcmax": 1.0,
+							"YVdcmax": 1.0
+						},
+						{
+							"Id": 6.0,
+							"XVdcmax": 1.0,
+							"YVdcmax": 1.0
+						},
+						{
+							"Id": 7.0,
+							"XVdcmax": 1.0,
+							"YVdcmax": 1.0
+						}
+					],
+					"CurvaPDCVSPACEnVDCMin": [
+						{
+							"Id": 1.0,
+							"XVdcMin": 1.0,
+							"YVdcMin": 1.0
+						},
+						{
+							"Id": 2.0,
+							"XVdcMin": 1.0,
+							"YVdcMin": 1.0
+						},
+						{
+							"Id": 3.0,
+							"XVdcMin": 1.0,
+							"YVdcMin": 1.0
+						},
+						{
+							"Id": 4.0,
+							"XVdcMin": 1.0,
+							"YVdcMin": 1.0
+						},
+						{
+							"Id": 5.0,
+							"XVdcMin": 1.0,
+							"YVdcMin": 1.0
+						},
+						{
+							"Id": 6.0,
+							"XVdcMin": 1.0,
+							"YVdcMin": 1.0
+						},
+						{
+							"Id": 7.0,
+							"XVdcMin": 1.0,
+							"YVdcMin": 1.0
+						}
+					],
+					"CurvaPDCVSPACEnVDCNominal": [
+						{
+							"Id": 1.0,
+							"XVdcnominal": 1.0,
+							"YVdcnominal": 1.0
+						},
+						{
+							"Id": 2.0,
+							"XVdcnominal": 1.0,
+							"YVdcnominal": 1.0
+						},
+						{
+							"Id": 3.0,
+							"XVdcnominal": 1.0,
+							"YVdcnominal": 1.0
+						},
+						{
+							"Id": 4.0,
+							"XVdcnominal": 1.0,
+							"YVdcnominal": 1.0
+						},
+						{
+							"Id": 5.0,
+							"XVdcnominal": 1.0,
+							"YVdcnominal": 1.0
+						},
+						{
+							"Id": 6.0,
+							"XVdcnominal": 1.0,
+							"YVdcnominal": 1.0
+						},
+						{
+							"Id": 7.0,
+							"XVdcnominal": 1.0,
+							"YVdcnominal": 1.0
+						}
+					],
+					"NInv": 8,
+					"PACnocturnoW": 3.3,
+					"PACnominal": 200000.0,
+					"PDCarranque": 2025.07,
+					"PDCnominal": 202507.04,
+					"ReferenciaInversor": "Huawei Technologies SUN2000-215KTL-H0",
+					"VDCnominal": 1174.0,
+					"PowerAc": [
+						1,
+						2,
+						3
+					],
+					"PowerDc": [
+						4,
+						5,
+						6
+					]
+				},
+				"ParametrosModulo": {
+					"AlphaSc": 0.05,
+					"AltoFilaPaneles": 2.5,
+					"AnchoFilaPaneles": 4.6,
+					"BetaOc": -0.28,
+					"Bifacial": true,
+					"Bifacialidad": 0.7,
+					"GammaPmp": -0.35,
+					"Impstc": 13.32,
+					"Iscstc": 14.21,
+					"Ns": 144.0,
+					"Pnominalstc": 565.0,
+					"Psi": 10.0,
+					"ReferenciaModulo": "JAM72D30_565_GB_1500V",
+					"Tecnologia": {
+						"Label": "Mono-Si",
+						"Value": "monosi"
+					},
+					"Tnoct": 45.0,
+					"Vmpstc": 42.42,
+					"Vocstc": 50.28
+				},
+				"EstructuraYConfiguracion": {
+					"CantidadPanelConectados": [
+						{
+							"CantidadParalero": 17,
+							"CantidadSerie": 26,
+							"Id": 1,
+							"OAzimutal": 108.0,
+							"OElevacion": 4.0,
+							"OMax": 55.0,
+							"Racking": {
+								"Value": "open_rack"
+							}
+						}
+					],
+					"EstructuraPlantaConSeguidores": true,
+					"NSubarrays": 1
+				}
+			},
+			{
+				"ParametrosInversor": {
+					"CurvaPDCVSPACEnVDCMax": [
+						{
+							"Id": 1.0,
+							"XVdcmax": 1.0,
+							"YVdcmax": 1.0
+						},
+						{
+							"Id": 2.0,
+							"XVdcmax": 1.0,
+							"YVdcmax": 1.0
+						},
+						{
+							"Id": 3.0,
+							"XVdcmax": 1.0,
+							"YVdcmax": 1.0
+						},
+						{
+							"Id": 4.0,
+							"XVdcmax": 1.0,
+							"YVdcmax": 1.0
+						},
+						{
+							"Id": 5.0,
+							"XVdcmax": 1.0,
+							"YVdcmax": 1.0
+						},
+						{
+							"Id": 6.0,
+							"XVdcmax": 1.0,
+							"YVdcmax": 1.0
+						},
+						{
+							"Id": 7.0,
+							"XVdcmax": 1.0,
+							"YVdcmax": 1.0
+						}
+					],
+					"CurvaPDCVSPACEnVDCMin": [
+						{
+							"Id": 1.0,
+							"XVdcMin": 1.0,
+							"YVdcMin": 1.0
+						},
+						{
+							"Id": 2.0,
+							"XVdcMin": 1.0,
+							"YVdcMin": 1.0
+						},
+						{
+							"Id": 3.0,
+							"XVdcMin": 1.0,
+							"YVdcMin": 1.0
+						},
+						{
+							"Id": 4.0,
+							"XVdcMin": 1.0,
+							"YVdcMin": 1.0
+						},
+						{
+							"Id": 5.0,
+							"XVdcMin": 1.0,
+							"YVdcMin": 1.0
+						},
+						{
+							"Id": 6.0,
+							"XVdcMin": 1.0,
+							"YVdcMin": 1.0
+						},
+						{
+							"Id": 7.0,
+							"XVdcMin": 1.0,
+							"YVdcMin": 1.0
+						}
+					],
+					"CurvaPDCVSPACEnVDCNominal": [
+						{
+							"Id": 1.0,
+							"XVdcnominal": 1.0,
+							"YVdcnominal": 1.0
+						},
+						{
+							"Id": 2.0,
+							"XVdcnominal": 1.0,
+							"YVdcnominal": 1.0
+						},
+						{
+							"Id": 3.0,
+							"XVdcnominal": 1.0,
+							"YVdcnominal": 1.0
+						},
+						{
+							"Id": 4.0,
+							"XVdcnominal": 1.0,
+							"YVdcnominal": 1.0
+						},
+						{
+							"Id": 5.0,
+							"XVdcnominal": 1.0,
+							"YVdcnominal": 1.0
+						},
+						{
+							"Id": 6.0,
+							"XVdcnominal": 1.0,
+							"YVdcnominal": 1.0
+						},
+						{
+							"Id": 7.0,
+							"XVdcnominal": 1.0,
+							"YVdcnominal": 1.0
+						}
+					],
+					"NInv": 4,
+					"PACnocturnoW": 3.3,
+					"PACnominal": 202507.04,
+					"PDCarranque": 2025.07,
+					"PDCnominal": 200000.0,
+					"ReferenciaInversor": "Huawei Technologies SUN2000-215KTL-H0",
+					"VDCnominal": 1174.0,
+					"PowerAc": [
+						1,
+						2,
+						3
+					],
+					"PowerDc": [
+						4,
+						5,
+						6
+					]
+				},
+				"ParametrosModulo": {
+					"AlphaSc": 0.5,
+					"AltoFilaPaneles": 2.5,
+					"AnchoFilaPaneles": 4.6,
+					"BetaOc": -0.28,
+					"Bifacial": true,
+					"Bifacialidad": 0.7,
+					"GammaPmp": -0.35,
+					"Impstc": 13.32,
+					"Iscstc": 14.21,
+					"Ns": 144.0,
+					"Pnominalstc": 565.0,
+					"Psi": 10.0,
+					"ReferenciaModulo": "JAM72D30_565_GB_1500V",
+					"Tecnologia": {
+						"Label": "Mono-Si",
+						"Value": "monosi"
+					},
+					"Tnoct": 45.0,
+					"Vmpstc": 42.42,
+					"Vocstc": 50.28
+				},
+				"EstructuraYConfiguracion": {
+					"CantidadPanelConectados": [
+						{
+							"CantidadParalero": 15,
+							"CantidadSerie": 26,
+							"Id": 1,
+							"OAzimutal": 180.0,
+							"OElevacion": 1.0,
+							"OMax": 55.0,
+							"Racking": {
+								"Value": "open_rack"
+							}
+						}
+					],
+					"EstructuraPlantaConSeguidores": true,
+					"NSubarrays": 1
+				}
+			},
+			{
+				"ParametrosInversor": {
+					"CurvaPDCVSPACEnVDCMax": [
+						{
+							"Id": 1.0,
+							"XVdcmax": 1.0,
+							"YVdcmax": 1.0
+						},
+						{
+							"Id": 2.0,
+							"XVdcmax": 1.0,
+							"YVdcmax": 1.0
+						},
+						{
+							"Id": 3.0,
+							"XVdcmax": 1.0,
+							"YVdcmax": 1.0
+						},
+						{
+							"Id": 4.0,
+							"XVdcmax": 1.0,
+							"YVdcmax": 1.0
+						},
+						{
+							"Id": 5.0,
+							"XVdcmax": 1.0,
+							"YVdcmax": 1.0
+						},
+						{
+							"Id": 6.0,
+							"XVdcmax": 1.0,
+							"YVdcmax": 1.0
+						},
+						{
+							"Id": 7.0,
+							"XVdcmax": 1.0,
+							"YVdcmax": 1.0
+						}
+					],
+					"CurvaPDCVSPACEnVDCMin": [
+						{
+							"Id": 1.0,
+							"XVdcMin": 1.0,
+							"YVdcMin": 1.0
+						},
+						{
+							"Id": 2.0,
+							"XVdcMin": 1.0,
+							"YVdcMin": 1.0
+						},
+						{
+							"Id": 3.0,
+							"XVdcMin": 1.0,
+							"YVdcMin": 1.0
+						},
+						{
+							"Id": 4.0,
+							"XVdcMin": 1.0,
+							"YVdcMin": 1.0
+						},
+						{
+							"Id": 5.0,
+							"XVdcMin": 1.0,
+							"YVdcMin": 1.0
+						},
+						{
+							"Id": 6.0,
+							"XVdcMin": 1.0,
+							"YVdcMin": 1.0
+						},
+						{
+							"Id": 7.0,
+							"XVdcMin": 1.0,
+							"YVdcMin": 1.0
+						}
+					],
+					"CurvaPDCVSPACEnVDCNominal": [
+						{
+							"Id": 1.0,
+							"XVdcnominal": 1.0,
+							"YVdcnominal": 1.0
+						},
+						{
+							"Id": 2.0,
+							"XVdcnominal": 1.0,
+							"YVdcnominal": 1.0
+						},
+						{
+							"Id": 3.0,
+							"XVdcnominal": 1.0,
+							"YVdcnominal": 1.0
+						},
+						{
+							"Id": 4.0,
+							"XVdcnominal": 1.0,
+							"YVdcnominal": 1.0
+						},
+						{
+							"Id": 5.0,
+							"XVdcnominal": 1.0,
+							"YVdcnominal": 2.0
+						},
+						{
+							"Id": 6.0,
+							"XVdcnominal": 12.0,
+							"YVdcnominal": 1.0
+						},
+						{
+							"Id": 7.0,
+							"XVdcnominal": 1.0,
+							"YVdcnominal": 1.0
+						}
+					],
+					"NInv": 42,
+					"PACnocturnoW": 3.3,
+					"PACnominal": 202507.04,
+					"PDCarranque": 2020.07,
+					"PDCnominal": 200000.0,
+					"ReferenciaInversor": "Huawei Technologies SUN2000-215KTL-H0",
+					"VDCnominal": 1174.0,
+					"PowerAc": [
+						1,
+						2,
+						3
+					],
+					"PowerDc": [
+						4,
+						5,
+						6
+					]
+				},
+				"ParametrosModulo": {
+					"AlphaSc": 0.05,
+					"AltoFilaPaneles": 2.5,
+					"AnchoFilaPaneles": 4.6,
+					"BetaOc": -0.28,
+					"Bifacial": true,
+					"Bifacialidad": 0.7,
+					"GammaPmp": -0.35,
+					"Impstc": 13.32,
+					"Iscstc": 14.21,
+					"Ns": 144.0,
+					"Pnominalstc": 565.0,
+					"Psi": 10.0,
+					"ReferenciaModulo": "JAM72D30 -565/GB/1500V",
+					"Tecnologia": {
+						"Label": "Mono-Si",
+						"Value": "monosi"
+					},
+					"Tnoct": 45.0,
+					"Vmpstc": 42.42,
+					"Vocstc": 50.28
+				},
+				"EstructuraYConfiguracion": {
+					"CantidadPanelConectados": [
+						{
+							"CantidadParalero": 16,
+							"CantidadSerie": 26,
+							"Id": 1,
+							"OAzimutal": 180.0,
+							"OElevacion": 4.0,
+							"OMax": 55.0,
+							"Racking": {
+								"Value": "open_rack"
+							}
+						}
+					],
+					"EstructuraPlantaConSeguidores": true,
+					"NSubarrays": 1
+				}
+			}
+		]
+	},
+	"ArchivoSeries": {
+		"ArchivoBase64": "",
+		"Nombre": "test_file.parquet",
+		"Estado": "",
+		"Error": ""
+	}
+}

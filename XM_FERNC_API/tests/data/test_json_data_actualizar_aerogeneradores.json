@@ -1,0 +1,141 @@
+{
+    "IdConexionWs": "iu3h428o3h4u2374hy",
+    "IdTransaccion": "irhgf",
+    "IdAplicacion": "oawihd",
+    "ParametrosTransversales": {
+        "NombrePlanta": "Nombre de la planta ",
+        "Cen": 11.0,
+        "Ihf": 87.0,
+        "Kpc": 0.0,
+        "Kt": 0.0,
+        "Kin": 0.0,
+        "Latitud": 5545.45454,
+        "Longitud": 54.54554,
+        "InformacionMedida": true,
+        "Offshore": false,
+        "Elevacion": 545.0,
+        "Voltaje": 54.54,
+        "Ppi": 11.0
+    },
+    "ParametrosConfiguracion": {
+        "SistemasDeMedicion": [
+            {
+                "IdentificadorTorre": "1",
+                "Latitud": 12.23587,
+                "Longitud": -71.25536,
+                "Elevacion": 0.0,
+                "RadioRepresentatividad": 10.0,
+                "CantidadAnemometro": 3,
+                "ConfiguracionAnemometro": [
+                    {
+                        "Anemometro": 1,
+                        "AlturaAnemometro": 1.0
+                    }
+                ],
+                "ArchivoSeriesRelacionado": "7893367b-9122-45d2-871e-6f5be18969ac_1_formato_series_eolicas_Ok_4_filas.xlsx"
+            },
+            {
+                "IdentificadorTorre": "2",
+                "Latitud": 15.44323,
+                "Longitud": -70.33423,
+                "Elevacion": 54545.0,
+                "RadioRepresentatividad": 54.0,
+                "CantidadAnemometro": 1,
+                "ConfiguracionAnemometro": [
+                    {
+                        "Anemometro": 1,
+                        "AlturaAnemometro": 12.0
+                    }
+                ],
+                "ArchivoSeriesRelacionado": "7893367b-9122-45d2-871e-6f5be18969ac_Torre 2_formato_series_eolicas_Ok_4_filas.xlsx"
+            },
+            {
+                "IdentificadorTorre": "3",
+                "Latitud": 15.62323,
+                "Longitud": -70.65423,
+                "Elevacion": 54545.0,
+                "RadioRepresentatividad": 30.0,
+                "CantidadAnemometro": 1,
+                "ConfiguracionAnemometro": [
+                    {
+                        "Anemometro": 1,
+                        "AlturaAnemometro": 12.0
+                    }
+                ],
+                "ArchivoSeriesRelacionado": "7893367b-9122-45d2-871e-6f5be18969ac_Torre 3_formato_series_eolicas_Ok_4_filas.xlsx"
+            }
+        ],
+        "Aerogeneradores": [
+            {
+                "ModeloAerogenerador": "Modelo ",
+                "AlturaBuje": 98.0,
+                "DiametroRotor": 92.0,
+                "PotenciaNominal": 2350.0,
+                "VelocidadNominal": 14.0,
+                "DensidadNominal": 1.23,
+                "VelocidadCorteInferior": 2.0,
+                "VelocidadCorteSuperior": 25.0,
+                "TemperaturaAmbienteMinima": -10.0,
+                "TemperaturaAmbienteMaxima": 45.0,
+                "CurvasDelFabricante": [
+                    {
+                        "SerieVelocidad": 1.0,
+                        "SeriePotencia": 1.0,
+                        "SerieCoeficiente": 1.0
+                    },
+                    {
+                        "SerieVelocidad": 1.0,
+                        "SeriePotencia": 25.0,
+                        "SerieCoeficiente": 8.0
+                    }
+                ],
+                "CantidadAerogeneradores": 3,
+                "EspecificacionesEspacialesAerogeneradores": [
+                    {
+                        "Aerogenerador": 1,
+                        "Latitud": 12.287679,
+                        "Longitud": -71.226417,
+                        "Elevacion": 2.0,
+                        "MedicionAsociada": {
+                            "Value": "torre_1"
+                        }
+                    },
+                    {
+                        "Aerogenerador": 2,
+                        "Latitud": 15.43323,
+                        "Longitud": -70.32423,
+                        "Elevacion": 28.0,
+                        "MedicionAsociada": {
+                            "Value": "torre_1"
+                        }
+                    },
+                    {
+                        "Aerogenerador": 3,
+                        "Latitud": 12.23587,
+                        "Longitud": -71.25536,
+                        "Elevacion": 28.0,
+                        "MedicionAsociada": {
+                            "Value": "torre_1"
+                        }
+                    }
+                ]
+            }
+        ],
+        "ParametroConexion": [
+            {
+                "Conexion": 1,
+                "CantidadAerogeneradoresConexion": 1,
+                "Resistencia": 1.0,
+                "ConexionAerogenerador": [
+                    {
+                        "OrdenConexion": 1,
+                        "IdentificadorAerogenerador": 1
+                    }
+                ]
+            }
+        ]
+    },
+    "ArchivoSeries": {
+        "Nombre": ""
+    }
+}

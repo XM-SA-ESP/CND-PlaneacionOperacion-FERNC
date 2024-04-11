@@ -1,0 +1,1 @@
+COLUMN_GHI = "ghi [Wh/m2]"
