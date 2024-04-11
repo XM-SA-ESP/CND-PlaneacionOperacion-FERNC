@@ -6,7 +6,6 @@ from urllib3.exceptions import InsecureRequestWarning
 
 from utils.manejador_service_bus import ManejadorServiceBus
 
-#PORQUE ESTO ? | ESTO OCULTA ALGUNAS EXCEPCIONES Y NO DEJA VER ERRORES QUE CONSUMEN MEMORIA
 warnings.filterwarnings("ignore", category=ShapelyDeprecationWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 warnings.filterwarnings("ignore", category=InsecureRequestWarning)
