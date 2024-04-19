@@ -15,7 +15,8 @@ Proyecto requerido para las resoluciones CREG 101 006 de 2023 para plantas eóli
 3. **Compilar y Restaurar Paquetes:** Ejecuta la compilación del proyecto para asegurarte de que todos los archivos necesarios estén en su lugar, usando los comandos (pip install -r .\requirements.txt) y (run .\main.py) ubicado en la carpeta ".\XM_FERNC_API".
 4. **Configurar Variables de Entorno:** las variables de encontro se encuentran en el archivo **.env**
 5. **Instalar libreria adicional:** Configura la biblioteca SolarLib en tu proyecto, ya que es necesaria para ejecutar el modelo solar de manera efectiva [Descargar código fuente](https://github.com/XM-SA-ESP/CND-PlaneacionOperacion-SOLARLIB).
-6. **Ejemplos de uso:** en modo desarrollo, la aplicación se suscribe a una cola de mensajeria que podra ser configurada por usted en un service bus y la estructura mensaje debe corresponder al siguiente ejemplo:
+6. **Ejemplos de uso:** en modo desarrollo, la aplicación se suscribe a una cola de mensajeria que podra ser configurada por usted en un service bus y la estructura del mensaje debe corresponder a los siguientes ejemplos:
+Para ambos JSON, existe una propiedad denominada 'TipoMensaje'. Esta propiedad se emplea para identificar el modelo que se va a calcular. 0:Solar, 1:Eólica
 
 **Ejemplo modelo Solar:**
 Valores disponibles para las siguientes propiedades:
@@ -28,7 +29,7 @@ Valores disponibles para las siguientes propiedades:
 {
 	"CuerpoMensaje": {
 		"ParametrosTransversales": {
-			"ZonaHoraria": "str", //Valor permitido:America/Bogota
+			"ZonaHoraria": "str",
 			"Altitud": "float",
 			"Albedo": "float",
 			"L": "float",
@@ -102,11 +103,11 @@ Valores disponibles para las siguientes propiedades:
 			"Nombre": "str",
 
 		},
-		"IdConexionWs": "str", //Siempre vacio
-		"IdTransaccion": "str", //Siempre vacio
-		"IdAplicacion": "str" //Siempre vacio
+		"IdConexionWs": "str", //Siempre vacio.
+		"IdTransaccion": "str", //Siempre vacio.
+		"IdAplicacion": "str" //Siempre vacio.
 	},
-	"TipoMensaje": "int" //0: Solar
+	"TipoMensaje": "int" //0:Solar.
 }
 ```
 
@@ -197,8 +198,7 @@ Valores disponibles para las siguientes propiedades:
 			]
 		},
 		"ArchivoSeries": {
-			"Nombre": "str",
-			"ArchivoBase64": "str"
+			"Nombre": "str"			
 		}
 	},
 	"TipoMensaje": "int"  //1: Eólica
