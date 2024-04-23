@@ -5,9 +5,9 @@ Este microservicio incluye los endpoints esenciales para obtener información pa
 Proyecto requerido para las resoluciones CREG 101 006 de 2023 para plantas eólicas y CREG 101 007 de 2023 para plantas solares fotovoltaicas, donde se define la metodología para determinar la energía firme para el cargo por confiabilidad y donde se regulan otras disposiciones.
 
 #Funcionalidades/Features:
-1. Calcular ENFICC para plantas solares.
-2. Calcular EDA para plantas eólicas.
-3. Producción energetida horaria para plantas solares y eólicas.
+1. Calcular ENFICC para plantas solares y eólicas.
+2. Calcular EDA para plantas solares eólicas.
+3. Producción energética horaria para plantas solares y eólicas.
 
 # Forma de uso/Ejemplos.
 1. **Descargar el Repositorio:** Clone el repositorio a su máquina local.
