@@ -208,7 +208,7 @@ class CalculoDCAC:
         series = series * (1 - (kpc / 100)) * (1 - (kt / 100)) * (1 - (kin / 100)) * (1 - ihf)
 
         # Limitar el valor máximo de la potencia total ajustada a Ppi para cada índice
-        series = series.clip(upper=params_trans.Ppi)
+        series = series.clip(upper=params_trans.Ppi/1000)
 
         return series
 
