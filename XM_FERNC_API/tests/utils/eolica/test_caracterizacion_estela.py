@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from utils.eolica.caracterizacion_estela import Estela
+from utils.eolica.caracterizacion_estela import Estela, efecto_estela_vectorizado_refactor
 from utils.eolica.funciones_ordenamiento import Ordenamiento
 from utils.eolica.dataclasses_eolica import (
     Aerogenerador,
@@ -19,6 +19,7 @@ from utils.estructura_xarray import (
 
 class TestEstela(unittest.TestCase):
     def setUp(self):
+        self.estela = Estela()
         self.ordenamiento = Ordenamiento()
         self.servicio_eolica = ServicioEolicas()
 
@@ -122,16 +123,87 @@ class TestEstela(unittest.TestCase):
         vectores_velocidades = self.servicio_eolica._ServicioEolicas__crear_lista_vectores_velocidades(self.aerogeneradores_con_df, serie_tiempo)
         estructura_xarray["velocidad_grandes_parques"] = (["turbina", "tiempo"], np.array(vectores_velocidades).T, {"Descripción": "Velocidad del viento perturbada por efecto de grandes parques en [m/s]."})
 
-        estela = Estela(True,
+        estela = self.estela
+
+        resultado = estela.efecto_estela_vectorizado(
+                True,
                 0.02,
                 caracteristicas_df,
                 densidad,
                 estructura_xarray,
                 n_turbinas,
                 curvas_xarray,
-                (1, dict_ordenamiento['2008-01-01 0:00:00+00:00']))
-
-        resultado = estela.efecto_estela_vectorizado()
+                (1, dict_ordenamiento['2008-01-01 0:00:00+00:00'])
+            )
 
         resultado_esperado = np.array([9.73, 9.73])
         self.assertTrue(np.allclose(resultado, resultado_esperado))
+
+    
+    def test_efecto_estela_vectorizado_refactor(self):
+        # Definir los parámetros de entrada simulados
+        offshore = False
+        cre = 0.05
+        densidad = 1.225
+        
+        n_turbinas = 3
+        turbine_info = {
+            'id_turbina': [0, 1, 2],
+            'longitud_m': np.array([0.0, 500.0, 1000.0]),
+            'latitud_m': np.array([0.0, 500.0, 1000.0]),
+            'Elevacion_m': np.array([50.0, 60.0, 55.0])
+        }
+
+        estructura_info = {
+            'direccion_viento': np.array([30.0, 45.0, 60.0]),  # Ahora es un array para cada turbina
+            'velocidad_viento': np.array([8.0, 10.0, 12.0])
+        }
+
+        caracteristicas_df = pd.DataFrame({
+            'altura_buje': [100.0, 105.0, 110.0],
+            'radio': [40.0, 45.0, 50.0],
+            'area_rotor': [5026.55, 6361.73, 7853.98],  # A = πr^2
+            'densidad': [1.225, 1.225, 1.225]
+        }, index=[0, 1, 2])
+
+        curvas_info = {
+            'cur_vel': [
+                np.array([5, 6, 7, 8, 9, 10, 11, 12]),
+                np.array([5, 6, 7, 8, 9, 10, 11, 12]),
+                np.array([5, 6, 7, 8, 9, 10, 11, 12])
+            ],
+            'cur_coef': [
+                np.array([0.45, 0.48, 0.50, 0.52, 0.54, 0.55, 0.56, 0.57]),
+                np.array([0.45, 0.48, 0.50, 0.52, 0.54, 0.55, 0.56, 0.57]),
+                np.array([0.45, 0.48, 0.50, 0.52, 0.54, 0.55, 0.56, 0.57])
+            ]
+        }
+
+        n_estampa_df = (0, 1)
+
+        # Ejecutar la función bajo prueba
+        resultado = efecto_estela_vectorizado_refactor(
+            offshore,
+            cre,
+            densidad,
+            turbine_info,
+            estructura_info,
+            n_turbinas,
+            caracteristicas_df,
+            curvas_info
+        )
+
+        # Comprobar el tipo de retorno
+        assert isinstance(resultado, np.ndarray), "El resultado debe ser un array de numpy"
+        
+        # Comprobar la longitud del resultado
+        assert len(resultado) == n_turbinas, "El resultado debe tener tantas entradas como turbinas"
+        
+        # Verificar que no haya valores NaN o negativos en el resultado
+        assert not np.isnan(resultado).any(), "No debería haber valores NaN en el resultado"
+        assert (resultado >= 0).all(), "No debería haber velocidades negativas en el resultado"
+
+        # Prueba de que la velocidad perturbada está en un rango esperado (por ejemplo entre 0 y 12 m/s)
+        assert (resultado >= 0).all() and (resultado <= 12).all(), "Las velocidades perturbadas deben estar en el rango 0-12 m/s"
+
+            

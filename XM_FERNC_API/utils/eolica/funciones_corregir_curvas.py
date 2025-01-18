@@ -1,14 +1,17 @@
 import pandas as pd
+import numpy as np
 from typing import Dict
 
-from infraestructura.models.eolica.parametros import (
+from XM_FERNC_API.infraestructura.models.eolica.parametros import (
     JsonModelEolica,
     Aerogeneradores,
     CurvasDelFabricante,
 )
-from utils.decoradores import capturar_excepciones
-from utils.manipulador_excepciones import CalculoExcepcion
-from utils.mensaje_constantes import MensajesEolica
+from XM_FERNC_API.utils.decoradores import capturar_excepciones
+from XM_FERNC_API.utils.manipulador_excepciones import CalculoExcepcion
+from XM_FERNC_API.utils.mensaje_constantes import MensajesEolica
+from pyspark.sql import DataFrame
+import pyspark.sql.functions as F
 
 
 class CorregirCurvas:
@@ -58,9 +61,22 @@ class CorregirCurvas:
                         v_diseno,
                     )
 
+    
+    def corregir_curvas(self, aerogen, modelo, den_promedio):
+        den_nominal = modelo.den_nominal
+        v_nominal = modelo.v_nominal
+        v_max = modelo.v_max
+        v_diseno = self.__obtener_vel_diseno(modelo)
+        
+        if den_promedio != den_nominal:
+            for curvas in aerogen.curvas_fabricante:
+                self.obtener_vp_vcth_corregida(
+                    curvas, den_nominal, den_promedio, v_max, v_nominal, v_diseno
+                )    
+    
     def corregir_curvas_sin_torres(
-        self, params: JsonModelEolica, df: pd.DataFrame
-    ) -> None:
+        self, df: pd.DataFrame | DataFrame, modelos_dict: Dict, aerogeneradores: Dict
+    ) -> None | DataFrame:
         """
         Corrige las curvas de rendimiento del aerogenerador sin tener en cuenta torres específicas.
 
@@ -73,18 +89,19 @@ class CorregirCurvas:
         - None: Este método no devuelve ningún valor. Las correcciones se realizan directamente en las curvas de rendimiento de los aerogeneradores.
         """
         den_promedio = self.obtener_promedio_densidad_buje(df["DenBuje"])
-        for modelo in params.ParametrosConfiguracion.Aerogeneradores:
-            den_nominal = modelo.DensidadNominal
-            v_nominal = modelo.VelocidadNominal
-            v_max = modelo.VelocidadCorteSuperior
+        for aerogen in aerogeneradores.values():
+            modelo = modelos_dict[aerogen.modelo]
+            den_nominal = modelo.den_nominal
+            v_nominal = modelo.v_nominal
+            v_max = modelo.v_max
             v_diseno = self.__obtener_vel_diseno(modelo)
-            if den_promedio != den_nominal:
-                for curvas in modelo.CurvasDelFabricante:
+            if den_promedio != den_nominal:                
+                for curvas in aerogen.curvas_fabricante:                    
                     self.obtener_vp_vcth_corregida(
                         curvas, den_nominal, den_promedio, v_max, v_nominal, v_diseno
                     )
 
-    def obtener_promedio_densidad_buje(self, densidad_series: pd.Series) -> float:
+    def obtener_promedio_densidad_buje(self, densidad_df: pd.Series | DataFrame) -> float:
         """
         Metodo que retorna la densidad promedio para la serie de densidad a la altura del buje de
         la torre siendo analizada.
@@ -94,7 +111,10 @@ class CorregirCurvas:
         Retorna:
             - float: Promedio de la densidad a la altura del buje.
         """
-        return round(densidad_series.mean(), 2)
+        if isinstance(densidad_df, pd.Series):
+            return np.round(densidad_df.mean(), 2)
+        else:
+            return densidad_df.select(F.round(F.mean("DenBuje"), 2).alias("MeanDenBuje")).collect()[0][0]
 
     def obtener_vp_vcth_corregida(
         self,
@@ -132,7 +152,7 @@ class CorregirCurvas:
             curvas.SerieVelocidad = vp_corregida
             curvas.SerieVcthCorregida = vcth_corregida
 
-        elif v_diseno <= v_fabricante <= v_nominal:
+        elif v_diseno < v_fabricante <= v_nominal:
             m = (1 / 3) + (
                 (1 / 3) * ((v_fabricante - v_diseno) / (v_nominal - v_diseno))
             )

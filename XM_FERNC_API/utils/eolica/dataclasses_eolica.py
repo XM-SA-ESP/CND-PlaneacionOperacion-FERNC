@@ -1,12 +1,12 @@
 import pandas as pd
 from typing import List
 from dataclasses import dataclass
-from infraestructura.models.eolica.parametros import (
+from XM_FERNC_API.infraestructura.models.eolica.parametros import (
     ConfiguracionAnemometro,
     CurvasDelFabricante,
 )
 
-from utils.eolica.distancia import distancia_geodesica
+from XM_FERNC_API.utils.eolica.distancia import distancia_geodesica
 
 
 @dataclass

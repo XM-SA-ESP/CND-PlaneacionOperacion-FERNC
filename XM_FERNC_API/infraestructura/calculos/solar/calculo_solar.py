@@ -1,19 +1,15 @@
 from datetime import datetime
 import os
 
-from dominio.servicio.azure.cliente_az_servicebus import ClienteServiceBusTransversal
-from dominio.servicio.solar.servicio_solares import ServicioSolar
-from infraestructura.models.solar.parametros import JsonModelSolar
-from utils.consumidor import ConsumirApiEstado
+from XM_FERNC_API.dominio.servicio.azure.cliente_az_servicebus import ClienteServiceBusTransversal
+from XM_FERNC_API.dominio.servicio.solar.servicio_solares import ServicioSolar
+from XM_FERNC_API.infraestructura.models.solar.parametros import JsonModelSolar
+from XM_FERNC_API.utils.consumidor import ConsumirApiEstado
 
-from utils.manipulador_excepciones import ManipuladorExcepciones
+from XM_FERNC_API.utils.manipulador_excepciones import ManipuladorExcepciones
 
 def realizar_calculo_solares(params: JsonModelSolar):
     servicio = ServicioSolar()
-    now = datetime.now()
-    print('iniciar calculo solar')
-    print(now)
-
     df = servicio.generar_dataframe(params.ArchivoSeries.Nombre)    
     respuesta = servicio.ejecutar_calculos(df, params)    
 
@@ -38,7 +34,7 @@ def realizar_calculo_solares(params: JsonModelSolar):
 
 def enviar_excepcion_sb_transversal(params: JsonModelSolar, excepcion: str):
     '''
-    Si llega IdAplicacion se envia mensaje a la integración por medio del service bus transversal
+    Si llega IdAplicacion se envia mensaje a la integración por medio del service bus transversal   
     Asi como se notifica al FE tambien se debe notifiar a aplicaciones que use este metodo
     '''
     if params.IdAplicacion:

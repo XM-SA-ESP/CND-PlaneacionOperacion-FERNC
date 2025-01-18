@@ -5,11 +5,11 @@ import pandas as pd
 import polars as pl
 import pandas.testing as pdt
 
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from infraestructura.models.eolica.parametros import ParametrosTransversales
 
-from utils.manipulador_dataframe import ManipuladorDataframe
-from infraestructura.models.respuesta import Resultado
+from XM_FERNC_API.utils.manipulador_dataframe import ManipuladorDataframe
+from XM_FERNC_API.infraestructura.models.respuesta import Resultado
 
 
 class TestManipuladorDataframe(unittest.TestCase):
@@ -236,60 +236,89 @@ class TestManipuladorDataframe(unittest.TestCase):
         pd.testing.assert_frame_equal(
             resultado_df, df_esperado, check_exact=False)
 
-    # def test_calcular_eda(self):
-    #     # Datos de prueba
+    def test_calcular_eda(self):
+         
+        # Datos de prueba
+        parametros_tranversales = ParametrosTransversales(
+             NombrePlanta="TestPlant",
+             Cen=2,
+             Ihf=87,
+             Kpc=1,
+             Kt=1,
+             Kin=1,
+             Latitud=45,
+             Longitud=45,
+             InformacionMedida=True,
+             Offshore=True,
+             Elevacion=0.3,
+             Voltaje=0.3,
+            Ppi=11.0
+        )
 
-    #     parametros_tranversales = ParametrosTransversales(
-    #         NombrePlanta="TestPlant",
-    #         Cen=2,
-    #         Ihf=87,
-    #         Kpc=1,
-    #         Kt=1,
-    #         Kin=1,
-    #         Latitud=45,
-    #         Longitud=45,
-    #         InformacionMedida=True,
-    #         Offshore=True,
-    #         Elevacion=0.3,
-    #         Voltaje=0.3,
-    #         Ppi=11.0
-    #     )
+        
+        df_em = pd.DataFrame({
+            'diaria': [15.0, 20.0, 18.0],
+        }, index=[
+            "2008-01-01 01:00:00-05:00", 
+            "2008-02-01 02:00:00-05:00",
+            "2008-03-01 03:00:00-05:00"
+         ])
+        
+        # Validando con enficc con mes diferente de 12
+        enficc = Resultado(anio=2008, mes=3, valor=100)
 
-    #     df_em = pd.DataFrame({
-    #         'diaria': [15.0, 20.0, 18.0],
-    #     }, index=[
-    #         "2008-01-01 01:00:00-05:00", 
-    #         "2008-01-01 02:00:00-05:00",
-    #         "2008-01-01 03:00:00-05:00"
-    #     ])
-    #     df_em = df_em[~df_em.index.duplicated(keep='first')]
+        resultados = self.manipulador_df_instancia.calcular_eda(
+             parametros_tranversales, df_em, enficc)
+        
+        esperado_1 = [
+            Resultado(anio=2007, mes=12, valor=None), 
+            Resultado(anio=2008, mes=1, valor=-85.0), 
+            Resultado(anio=2008, mes=2, valor=-80.0), 
+            Resultado(anio=2008, mes=3, valor=-82.0), 
+            Resultado(anio=2008, mes=4, valor=None), 
+            Resultado(anio=2008, mes=5, valor=None), 
+            Resultado(anio=2008, mes=6, valor=None), 
+            Resultado(anio=2008, mes=7, valor=None), 
+            Resultado(anio=2008, mes=8, valor=None), 
+            Resultado(anio=2008, mes=9, valor=None), 
+            Resultado(anio=2008, mes=10, valor=None), 
+            Resultado(anio=2008, mes=11, valor=None)
+        ]
+        
+        self.assertEqual(resultados, esperado_1)
 
-    #     enficc = Resultado(anio=2008, Mes=3, Valor=100)
+        df_em = pd.DataFrame({
+            'diaria': [15.0, 20.0, 18.0],
+        }, index=[
+            "2008-01-01 01:00:00-05:00", 
+            "2008-02-01 02:00:00-05:00",
+            "2008-03-01 03:00:00-05:00"
+         ])
+        
+        # Validando con enficc con mes 12
+        enficc = Resultado(anio=2008, mes=12, valor=100)
+        resultados = self.manipulador_df_instancia.calcular_eda(
+             parametros_tranversales, df_em, enficc)    
+       
+        esperado_2 = [
+            Resultado(anio=2008, mes=12, valor=None), 
+            Resultado(anio=2009, mes=1, valor=None), 
+            Resultado(anio=2009, mes=2, valor=None), 
+            Resultado(anio=2009, mes=3, valor=None), 
+            Resultado(anio=2009, mes=4, valor=None), 
+            Resultado(anio=2009, mes=5, valor=None), 
+            Resultado(anio=2009, mes=6, valor=None), 
+            Resultado(anio=2009, mes=7, valor=None), 
+            Resultado(anio=2009, mes=8, valor=None), 
+            Resultado(anio=2009, mes=9, valor=None), 
+            Resultado(anio=2009, mes=10, valor=None), 
+            Resultado(anio=2009, mes=11, valor=None)]
+        print(resultados)
+        self.assertEqual(resultados, esperado_2)
+        
 
-    #     # Invocar el método calcular_eda
-    #     resultados = self.manipulador_df_instancia.calcular_eda(
-    #         parametros_tranversales, df_em, enficc)
 
-    #     # Resultados esperados (puedes ajustar estos valores)
-    #     esperado = [
-    #         Resultado(anio=2022, Mes=12, Valor="N/A"),
-    #         Resultado(anio=2023, Mes=1, Valor=900.0),  # 1000 - 100
-    #         Resultado(anio=2023, Mes=2, Valor=800.0),  # 900 - 100
-    #         Resultado(anio=2023, Mes=3, Valor=1100.0),  # 1200 - 100
-    #         Resultado(anio=2023, Mes=4, Valor="N/A"),
-    #         Resultado(anio=2023, Mes=5, Valor="N/A"),
-    #         Resultado(anio=2023, Mes=6, Valor="N/A"),
-    #         Resultado(anio=2023, Mes=7, Valor="N/A"),
-    #         Resultado(anio=2023, Mes=8, Valor="N/A"),
-    #         Resultado(anio=2023, Mes=9, Valor="N/A"),
-    #         Resultado(anio=2023, Mes=10, Valor="N/A"),
-    #         Resultado(anio=2023, Mes=11, Valor="N/A"),
-    #     ]
-
-    #     # Verificación
-    #     self.assertEqual(resultados, esperado)
-
-    @patch('utils.manipulador_dataframe.ManipuladorDataframe.crear_serie_doy')
+    @patch('XM_FERNC_API.utils.manipulador_dataframe.ManipuladorDataframe.crear_serie_doy')
     def test_ajustar_df_eolica(self, mock_crear_serie_doy):
 
         data = {
@@ -298,7 +327,7 @@ class TestManipuladorDataframe(unittest.TestCase):
             'Ta': ['25.0', '26.5', '24.8'],
             'VelocidadViento': ['8.2', '7.6', '9.1'],
         }
-        df = pl.DataFrame(data)
+        df = pd.DataFrame(data)
 
         mock_crear_serie_doy.return_value = pd.date_range(
             start='2023-01-01', periods=3, freq='H')
@@ -385,3 +414,34 @@ class TestManipuladorDataframe(unittest.TestCase):
         }).astype({'Año': int, 'Mes': int})
 
         pd.testing.assert_frame_equal(transformed_df, expected_df)
+
+    def test_crear_serie_doy_else(self):
+        # Crear un mock para el DataFrame de PySpark
+        mock_df = MagicMock()
+
+        # Configurar el mock para simular el comportamiento de withColumn
+        mock_df.withColumn.side_effect = lambda col_name, expr: mock_df  # Retorna el mismo mock para encadenar llamadas
+
+        # Simular el comportamiento de concat, concat_ws, lpad, to_timestamp, y to_utc_timestamp
+        mock_df.concat = MagicMock(return_value="mock_concat_result")
+        mock_df.concat_ws = MagicMock(return_value="mock_concat_ws_result")
+        mock_df.lpad = MagicMock(return_value="mock_lpad_result")
+        mock_df.to_timestamp = MagicMock(return_value=mock_df)  # Retorna el mismo mock
+        mock_df.to_utc_timestamp = MagicMock(return_value=mock_df)  # Retorna el mismo mock
+
+        # Instanciar la clase que contiene la función a probar
+        objeto = ManipuladorDataframe()  # Reemplaza 'TuClase' por el nombre real de la clase
+
+        # Actuar
+        resultado = objeto.crear_serie_doy(mock_df, tz="UTC")
+
+        # Verificar que se llamaron los métodos withColumn correctamente
+        self.assertEqual(mock_df.withColumn.call_count, 3)
+
+        # Verificar que las llamadas a withColumn se hicieron con los argumentos correctos
+        #mock_df.withColumn.assert_any_call("index", "mock_concat_result")
+        #mock_df.withColumn.assert_any_call("index", mock_df.to_timestamp("index", "yyyy-M-d HH"))
+        #mock_df.withColumn.assert_any_call("index", mock_df.to_utc_timestamp(mock_df.col('index'), "UTC"))
+
+        # Verificar que el resultado sea el DataFrame mockeado
+        #self.assertIs(resultado, mock_df)

@@ -1,35 +1,38 @@
 from ctypes import ArgumentError
 import gc
 import os
-from dominio.servicio.azure.cliente_az_servicebus import ClienteServiceBusTransversal
-from infraestructura.models.eolica.parametros import JsonModelEolica
-from infraestructura.models.solar.parametros import JsonModelSolar
-from infraestructura.calculos.eolica.calculo_eolica import realizar_calculo_eolicas
-from infraestructura.calculos.solar.calculo_solar import realizar_calculo_solares
-from infraestructura.models.mensaje_azure import RecibirMensajeAzure
-from infraestructura.models.respuesta import Respuesta
-from utils.consumidor import ConsumirApiEstado
+from XM_FERNC_API.dominio.servicio.azure.cliente_az_servicebus import ClienteServiceBusTransversal
+from XM_FERNC_API.infraestructura.models.eolica.parametros import JsonModelEolica
+from XM_FERNC_API.infraestructura.models.solar.parametros import JsonModelSolar
+from XM_FERNC_API.infraestructura.calculos.eolica.calculo_eolica import realizar_calculo_eolicas
+from XM_FERNC_API.infraestructura.calculos.solar.calculo_solar import realizar_calculo_solares
+from XM_FERNC_API.infraestructura.models.mensaje_azure import RecibirMensajeAzure
+from XM_FERNC_API.infraestructura.models.respuesta import Respuesta
+from XM_FERNC_API.utils.consumidor import ConsumirApiEstado
 
-# De acuerdo al tipo de mensaje se llama un metodo o el otro
+#De acuerdo al tipo de mensaje se llama un metodo o el otro
 switch_dict = {
     0: lambda param: realizar_calculo_solares(param),
     1: lambda param: realizar_calculo_eolicas(param),
 }
 
-def procesar_mensaje(mensaje_json: str):
-    mensaje_recibido = RecibirMensajeAzure.model_validate_json(mensaje_json, strict=False)
+def procesar_mensaje(mensaje_json, tipo_mensaje):
+    mensaje_recibido = mensaje_json#RecibirMensajeAzure.model_validate_json(mensaje_json, strict=False)
 
-    tipo_mensaje = mensaje_recibido.TipoMensaje
-    parametros = mensaje_recibido.CuerpoMensaje
+    if tipo_mensaje:
+        parametros = JsonModelEolica(**mensaje_recibido)
+        
+    else:
+        parametros = JsonModelSolar(**mensaje_recibido)
+        
 
     funcion_seleccionada = switch_dict.get(tipo_mensaje, lambda param: pordefento(param))
     resultado = funcion_seleccionada(parametros)
-    enviar_resultados(resultado, parametros)  # Enviar información al FE/Integración
+    enviar_resultados(resultado, parametros) #Enviar información al FE/Integración
 
     print("Proceso finalizado.")
+    return resultado
 
-    # Invocar la recolección de basura manualmente
-    gc.collect()
 
 def enviar_resultados(resultado: Respuesta, parametros: JsonModelSolar| JsonModelEolica):
     '''
@@ -54,18 +57,16 @@ def enviar_resultados(resultado: Respuesta, parametros: JsonModelSolar| JsonMode
                 "CalculoCorrecto": true
             }}
         '''
-        # Enviar resultados al FE
+        #Enviar resultados al FE
         ws_estado_fe.enviar_resultados(mensaje=json_string, exitoso=True)
-        # Enviar resultados al service bus transversal | SUICC
+        #Enviar resultados al service bus transversal | SUICC
         enviar_mensaje_sb_transversal(parametros.IdAplicacion, json_string)
 
-
 def enviar_mensaje_sb_transversal(id_aplicacion: str, json_resultado: str):
-    if id_aplicacion:
-        servicebus_transversal = ClienteServiceBusTransversal(os.environ.get("ENVIRONMENT"))
-        servicebus_transversal.enviar_mensaje_a_servicebus(cuerpo_mensaje=json_resultado, id_aplicacion=id_aplicacion)
-
-
+   if id_aplicacion:
+       servicebus_transversal = ClienteServiceBusTransversal(os.environ.get("ENVIRONMENT"))
+       servicebus_transversal.enviar_mensaje_a_servicebus(cuerpo_mensaje=json_resultado, id_aplicacion=id_aplicacion)
+    
 def pordefento(tipo_mensaje: int):
     """
     Metodo usado para generar un error en caso de que no se reconozca el tipo de mensaje

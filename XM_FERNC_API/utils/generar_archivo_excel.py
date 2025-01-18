@@ -1,9 +1,13 @@
+import os
+from XM_FERNC_API.dominio.servicio.azure_blob.cliente_azure import generar_archivo_excel_y_subir_volumen
+
 class GenerarArchivoExcel:
-    def __init__(self, manipulador_df):
+    def __init__(self, manipulador_df, tipo_mensaje=None):
         self.manipulador_df = manipulador_df
+        self.tipo_mensaje = tipo_mensaje
 
     def generar_archivo_excel(
-        self, cliente_azure, energia_planta, energia_mes, energia_diaria, enficc, eda, nombre_archivo
+        self, energia_planta, energia_mes, energia_diaria, enficc, eda, nombre_archivo
     ):        
         energia_planta = self.manipulador_df.transform_energia_planta(energia_planta)
         energia_mes = self.manipulador_df.transform_energia_mes(energia_mes)
@@ -22,7 +26,8 @@ class GenerarArchivoExcel:
         }
 
         # Llamar a la función generar_archivo_excel_y_subir para escribir los DataFrames
-        # en el archivo Excel y subirlo a Azure Blob Storage
-        cliente_azure.generar_archivo_excel_y_subir(
+        # en el archivo Excel y subirlo a Azure Blob Storage 
+                        
+        generar_archivo_excel_y_subir_volumen(
             diccionario_hojas, nombre_archivo
         )

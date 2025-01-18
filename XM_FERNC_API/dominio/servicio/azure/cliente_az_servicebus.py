@@ -4,8 +4,8 @@ from azure.servicebus import ServiceBusMessage
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 
-from infraestructura.models.eolica.parametros import JsonModelEolica
-from infraestructura.models.solar.parametros import JsonModelSolar
+from XM_FERNC_API.infraestructura.models.eolica.parametros import JsonModelEolica
+from XM_FERNC_API.infraestructura.models.solar.parametros import JsonModelSolar
 
 
 class ClienteServiceBusTransversal:
@@ -18,16 +18,14 @@ class ClienteServiceBusTransversal:
         else:
             credencial = DefaultAzureCredential()
             self.credencial = credencial
-            self.namespace, self.nombre_topico = self.__obtener_sb_nombre_espacio(
-                credencial
-            )
+            self.namespace, self.nombre_topico = self.__obtener_sb_nombre_espacio()
 
     def enviar_mensaje_a_servicebus(self, cuerpo_mensaje: str, id_aplicacion: str):
         with (
             ServiceBusClient.from_connection_string(self.cadena_conexion)
             if self.environment == "dev"
             else ServiceBusClient(self.namespace, self.credencial)
-        ) as cliente_servicebus:
+        ) as cliente_servicebus:            
             self.__enviar_mensaje(cliente_servicebus, cuerpo_mensaje, id_aplicacion)
 
     def __enviar_mensaje(
@@ -37,10 +35,13 @@ class ClienteServiceBusTransversal:
         Enviar mensaje: la propiedad message_id llega al service bus y se filtra a la suscripción exacta.
         con este campo se asegura que la aplicación que esta suscrita a una suscripción reciba el mensaje.
         """
-        sender = cliente_servicebus.get_topic_sender(topic_name=self.nombre_topico)
-        mensaje = ServiceBusMessage(cuerpo_mensaje)
-        mensaje.message_id = id_aplicacion
-        sender.send_messages(mensaje)
+        try:
+            sender = cliente_servicebus.get_topic_sender(topic_name=self.nombre_topico)
+            mensaje = ServiceBusMessage(cuerpo_mensaje)
+            mensaje.message_id = id_aplicacion
+            sender.send_messages(mensaje)
+        except Exception as e:
+            print(e)
 
     def enviar_mensaje_excepcion(
         self, params: JsonModelSolar | JsonModelEolica, mensaje_excepcion: str
@@ -63,9 +64,14 @@ class ClienteServiceBusTransversal:
                 "ExcepcionPython": "{mensaje_excepcion}"
             }}
         """
-        servicebus_transversal.enviar_mensaje(
-            cuerpo_mensaje=json_string, id_aplicacion=params.IdAplicacion
-        )
+        print(f"Mensaje excepcion: {json_string}")
+        try:
+            servicebus_transversal.enviar_mensaje_a_servicebus(
+                cuerpo_mensaje=json_string, id_aplicacion=params.IdAplicacion
+            )
+        except Exception as e:
+            print("Error en el metodo enviar_mensaje_excepcion")
+            print(e)
 
     def __obtener_sb_connection_string(self) -> str:
         """
@@ -73,16 +79,10 @@ class ClienteServiceBusTransversal:
         """
         return os.environ.get("CONNECTION_STRING_SB_TRANSVERSAL")
 
-    def __obtener_sb_nombre_espacio(self, credencial: DefaultAzureCredential) -> tuple:
+    def __obtener_sb_nombre_espacio(self) -> tuple:
         """
         Metodo usado para obtener namespace de servicebus transversal a donde se envian mensaje para la integración con otros sistemas (SUICC)
         """
-        keyvault_uri = os.environ.get("KEYVAULT_URI")
-        secretos = SecretClient(vault_url=keyvault_uri, credential=credencial)
-        nombre_espacio = secretos.get_secret(
-            "xm-fernc-serviceBus-transversal-url-integracion"
-        ).value
-        nombre_topico = secretos.get_secret(
-            "xm-fernc-serviceBus-transversal-nombretopic-integracion"
-        ).value
+        nombre_espacio = os.environ.get("xm-fernc-serviceBus-transversal-url-integracion")
+        nombre_topico = os.environ.get("xm-fernc-serviceBus-transversal-nombretopic-integracion")
         return nombre_espacio, nombre_topico

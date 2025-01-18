@@ -1,9 +1,10 @@
 import unittest
+from unittest.mock import patch, MagicMock
 import pandas as pd
 import pandas.testing as pdt
 from xm_solarlib.location import Location
 
-from utils.solar.funciones_dni_dhi import CalculoDniDhi
+from utils.solar.funciones_dni_dhi import CalculoDniDhi, timer
 
 
 class TestCalculoDniDhi(unittest.TestCase):
@@ -197,3 +198,36 @@ class TestCalculoDniDhi(unittest.TestCase):
 
         # assert_frame_equal entre el resultado y el df esperado
         pdt.assert_frame_equal(resultado, resultado_esperado)
+
+    @patch('builtins.print')  # Mock de la función print
+    def test_timer(self, mock_print):
+        start = 3600  # 1 hora
+        end = 3665    # 1 hora y 5 segundos
+        timer(start, end)
+
+        # Verificamos que print fue llamado con el formato correcto
+        mock_print.assert_called_once_with("00:01:05.00")
+
+    @patch('xm_solarlib.irradiance.get_extra_radiation')  # Mock de la función externa
+    def test_obtener_irradiacion_extraterrestre(self, mock_get_extra_radiation):
+        # Configuración del DataFrame de prueba
+        df_prueba = pd.DataFrame({
+            'fecha': pd.date_range(start='2024-01-01', periods=5, freq='D')
+        })
+
+        # Simular el resultado que debería devolver la función mockeada
+        resultado_simulado = pd.DataFrame({
+            'irradiacion': [100, 150, 200, 250, 300]
+        })
+        mock_get_extra_radiation.return_value = resultado_simulado
+
+        # Instanciamos la clase que contiene la función a probar
+        objeto = CalculoDniDhi()  # Reemplaza 'tu_clase' por el nombre real de la clase
+
+        # Actuamos
+        resultado = objeto.obtener_irradiacion_extraterrestre(df_prueba)
+
+        # Afirmamos que el resultado es el esperado
+        pd.testing.assert_frame_equal(resultado, resultado_simulado)
+        mock_get_extra_radiation.assert_called_once_with(datetime_or_doy=df_prueba)
+

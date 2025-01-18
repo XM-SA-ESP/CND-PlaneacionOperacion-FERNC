@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 
-from infraestructura.models.solar.parametros import JsonModelSolar
-from infraestructura.models.eolica.parametros import JsonModelEolica
+from XM_FERNC_API.infraestructura.models.solar.parametros import JsonModelSolar
+from XM_FERNC_API.infraestructura.models.eolica.parametros import JsonModelEolica
 
 
 class RecibirMensajeAzure(BaseModel):

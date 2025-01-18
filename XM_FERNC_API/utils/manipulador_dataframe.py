@@ -4,11 +4,29 @@ from dataclasses import asdict
 from typing import List, Dict
 from pandas.core.frame import DataFrame as Pandas_Dataframe
 
-from infraestructura.models.respuesta import Resultado
-from infraestructura.models.solar.parametros import ParametrosTransversales as ParametrosTransversalesSolar
-from infraestructura.models.solar.parametros import ParametrosTransversales as ParametrosTransversalesEolica
+from XM_FERNC_API.infraestructura.models.respuesta import Resultado
+from XM_FERNC_API.infraestructura.models.solar.parametros import ParametrosTransversales as ParametrosTransversalesSolar
+from XM_FERNC_API.infraestructura.models.solar.parametros import ParametrosTransversales as ParametrosTransversalesEolica
+from XM_FERNC_API.utils.eolica.validaciones_dataframe import validar_presion_atmosferica
 
-from utils import utils_data_constants
+from XM_FERNC_API.utils import utils_data_constants
+
+
+from pyspark.sql import DataFrame
+from pyspark.sql.types import FloatType, DoubleType
+from pyspark.sql.functions import (col,
+                                   concat_ws,
+                                   to_timestamp,
+                                   regexp_replace,
+                                   concat,
+                                   lpad,
+                                   lit,
+                                   to_utc_timestamp,
+                                   round as pyspark_round,
+                                   date_format)
+
+
+
 
 class ManipuladorDataframe:
     def __init__(self) -> None:
@@ -27,7 +45,7 @@ class ManipuladorDataframe:
 
         Retorna:
             - calculo_df (pd.DataFrame): Un nuevo DataFrame con los valores calculados.
-        """
+        """          
         ghi = df["Ghi"].astype(float)
         ghi = ghi * 1000
         calculo_df = pd.DataFrame(solpos.zenith)
@@ -36,7 +54,8 @@ class ManipuladorDataframe:
         ghi.index = calculo_df.index
         calculo_df["GHI"] = ghi
 
-        calculo_df["apparent_zenith"] = solpos.apparent_zenith
+        calculo_df["apparent_zenith"] = solpos.apparent_zenith       
+
         return calculo_df
 
     def combinar_dataframes(
@@ -56,17 +75,16 @@ class ManipuladorDataframe:
 
         Retorna:
             - df (pd.Dataframe): El dataframe combinado.
-        """
+        """               
+
         df = series_dni_dhi.copy()
         df.loc[:, "azimuth"] = solpos["azimuth"]
         df.loc[:, "iext"] = iext
         df.loc[:, "apparent_zenith"] = solpos["apparent_zenith"]
-
         df = df.astype("float")
-
         return df
 
-    def crear_serie_doy(self, df: Pandas_Dataframe, tz: str = "UTC") -> pd.DatetimeIndex:
+    def crear_serie_doy(self, df: pd.DataFrame | DataFrame, tz: str = "UTC") -> pd.DatetimeIndex | DataFrame:
         """
         Combina las columnas año, mes, dia y hora para generar un indice de tipo pd.DatetimeIndex
         en formato %Y-%m-%d %H para usar en los calculos.
@@ -77,7 +95,7 @@ class ManipuladorDataframe:
         Retorna:
             - times (pd.DatimeIndex): DatetimeIndex en formato %Y-%m-%d %H.
         """
-        times = pd.to_datetime(
+        """times = pd.to_datetime(
             df["Ano"].astype(str)
             + "-"
             + df["Mes"].astype(str)
@@ -87,10 +105,34 @@ class ManipuladorDataframe:
             + df["Hora"].astype(str),
             format="%Y-%m-%d %H",
         )
+        times = pd.DatetimeIndex(pd.to_datetime(times)).tz_localize(tz)"""
+        if isinstance(df, pd.DataFrame):            
+            
+            times = pd.to_datetime(
+                df.assign(
+                    Ano=df["Ano"].astype(int), 
+                    Mes=df["Mes"].astype(int), 
+                    Dia=df["Dia"].astype(int), 
+                    Hora=df["Hora"].astype(int)
+                ).rename(columns={"Ano": "year", "Mes": "month", "Dia": "day", "Hora": "hour"})[["year", "month", "day", "hour"]]
+            )
 
-        times = pd.DatetimeIndex(pd.to_datetime(times)).tz_localize(tz)
+            # Adding timezone localization
+            times = pd.DatetimeIndex(times.dt.tz_localize(tz))
 
-        return times
+            return times
+        else:             
+            df = df.withColumn("index", 
+                               concat(
+                                   concat_ws("-",col("Ano").cast("string"),col("Mes").cast("string"),col("Dia").cast("string")), 
+                                   lit(" "), 
+                                   lpad(col("Hora").cast("string"), 2, "0")
+                                   ))
+            df = df.withColumn("index", to_timestamp("index","yyyy-M-d HH"))#.drop("Hora_zfilled")
+            df = df.withColumn("index", to_utc_timestamp(col('index'), tz))                       
+            
+
+            return df
 
     def filtrar_dataframe(self, df: Pandas_Dataframe) -> Pandas_Dataframe:
         """
@@ -104,11 +146,15 @@ class ManipuladorDataframe:
                 - Hora entre 6:00 y 18:00.
                 - La columna 'dni' es igual a 0 y la columna 'dhi' es igual a 0.
                 - Todos los valores en la fila son iguales a 0.
-        """
-        local_df = df.copy()
-        local_df = local_df.between_time("6:00", "18:00")
-        local_df.loc[(local_df["dni"] == 0) & (local_df["dhi"] == 0), :] = 0
-        local_df = local_df.loc[~(local_df == 0).all(axis=1)]
+        """        
+        local_df = df.between_time("6:00", "18:00")
+
+        # Use boolean indexing and apply the condition more efficiently
+        condition = (local_df["dni"] == 0) & (local_df["dhi"] == 0)
+        local_df.loc[condition, :] = 0
+
+        # Directly filter out rows where all columns are 0
+        local_df = local_df.loc[~(local_df.eq(0).all(axis=1))]
         return local_df
 
     def restaurar_dataframe(self, series_df, inversores_df) -> None:
@@ -131,12 +177,17 @@ class ManipuladorDataframe:
         - Convierte la columna "Ta" de series_df a tipo float y la asigna a la columna "Ta" de los datos actuales.
         - Rellena los valores faltantes en la columna "POA" con 0.0.
         """
-        series_dummy = pd.DataFrame()
-        series_dummy.index = series_df.index
-        series_dummy["poa"] = 0.0
+        
+        # Initialize the 'poa' column in each inverter's POA data with zeros
         for data in inversores_df.values():
-            data["POA"] = series_dummy.add(data["POA"])
-            data["POA"]["Ta"] = series_df.Ta.astype(float)
+            # Add the 'poa' data to each inverter's POA DataFrame
+            data["POA"] = data["POA"].reindex(series_df.index, fill_value=0.0)  # Ensure proper indexing and fill with zeros
+            data["POA"]["poa"] = data["POA"]["poa"].add(0.0)  # Efficiently handle the summing
+            
+            # Assign 'Ta' column directly from series_df and cast to float
+            data["POA"]["Ta"] = series_df["Ta"].astype(float)
+
+            # Fill missing values (if any) in the entire POA DataFrame
             data["POA"] = data["POA"].fillna(0.0)
 
     def filtrar_por_mes(self, serie_energia: pd.Series) -> pd.Series:
@@ -196,9 +247,13 @@ class ManipuladorDataframe:
         # Extraemos el año de ENFICC
         anio_enficc = enficc.anio
 
-        # Definimos el rango de fechas que nos interesa: desde diciembre del año pasado hasta noviembre del año actual
-        fecha_inicio = f"{anio_enficc-1}-12-01"
-        fecha_fin = f"{anio_enficc}-11-30"  # Establecer el último día de noviembre
+        if enficc.mes == 12: #Si el mes es diciembre se genera la EDA con meses del año siguiente
+            fecha_inicio = f"{anio_enficc}-12-01"
+            fecha_fin = f"{anio_enficc+1}-11-30"
+        else: #Si el mes de la ENFICC esta entre enero y noviembre se toma año referencia -1 hasta año ref noviembre
+            # Definimos el rango de fechas que nos interesa: desde diciembre del año pasado hasta noviembre del año actual
+            fecha_inicio = f"{anio_enficc-1}-12-01"
+            fecha_fin = f"{anio_enficc}-11-30"
 
         # Crear un índice con todas las fechas deseadas
         rango_fechas = pd.date_range(start=fecha_inicio, end=fecha_fin, freq="M").to_period('M')
@@ -220,7 +275,7 @@ class ManipuladorDataframe:
 
         return resultados
 
-    def ajustar_df_eolica(self, df: pl.DataFrame) -> pd.DataFrame:
+    def ajustar_df_eolica(self, df: DataFrame) -> pd.DataFrame:
         """
         Ajusta el DataFrame con la serie de datos para el calculo de la energia eolica.
 
@@ -234,7 +289,7 @@ class ManipuladorDataframe:
                 - 'Ta' (float): La temperatura.
                 - 'VelocidadViento' (float): La velocidad del viento.
         """
-        df = df.to_pandas()
+        """df = df.to_pandas()
         series_tiempo = self.crear_serie_doy(df)
         df.index = series_tiempo
         df['DireccionViento'] = df['DireccionViento'].str.replace(',', '.')
@@ -242,13 +297,40 @@ class ManipuladorDataframe:
         df['VelocidadViento'] = df['VelocidadViento'].str.replace(',', '.')
         df['Ta'] = df['Ta'].str.replace(',', '.')
         df = df[["DireccionViento", "PresionAtmosferica", "Ta", "VelocidadViento"]]
-        df = df.astype(float)        
+        df = df.astype(float)"""
+
+        #Asignar DOY al dataframe
+        if isinstance(df, pd.DataFrame):
+            series_tiempo = self.crear_serie_doy(df)
+            df.index = series_tiempo
+            df['DireccionViento'] = df['DireccionViento'].str.replace(',', '.')
+            df['PresionAtmosferica'] = df['PresionAtmosferica'].str.replace(',', '.')
+            df['VelocidadViento'] = df['VelocidadViento'].str.replace(',', '.')
+            df['Ta'] = df['Ta'].str.replace(',', '.')
+            df = df[["DireccionViento", "PresionAtmosferica", "Ta", "VelocidadViento"]]
+            df = df.astype(float)
+        else:
+            df = self.crear_serie_doy(df)
+            df = df.withColumn('DireccionViento', regexp_replace(col('DireccionViento'), ',', '.'))
+            df = df.withColumn('PresionAtmosferica', regexp_replace(col('PresionAtmosferica'), ',', '.'))
+            df = df.withColumn('VelocidadViento', regexp_replace(col('VelocidadViento'), ',', '.'))
+            df = df.withColumn('Ta', regexp_replace(col('Ta'), ',', '.'))
+
+            # Seleccionar las columnas deseadas y convertir los tipos a float
+            columnas = ["DireccionViento", "PresionAtmosferica", "Ta", "VelocidadViento"]
+            for columna in columnas:
+                df = df.withColumn(columna, pyspark_round(col(columna).cast(DoubleType()),2)  )
+            selected_columns = ["index"] + columnas            
+            df = df.select([col(c) for c in selected_columns])      
+
+        # Luego de ajustar los valores ejecutamos validacion para validar que la P.A. no sea superior a 3000
+        validar_presion_atmosferica(df)        
 
         return df
     
     def obtener_serie_tiempo_eolica(
-        self, df: pd.DataFrame=None, torres: Dict=None
-    ) -> pd.DatetimeIndex:
+        self, df: pd.DataFrame | DataFrame=None  , torres: Dict=None
+    ) -> pd.DatetimeIndex  | DataFrame:
         """
         Extrae el indice de tipo pd.DatetimeIndex del dataframe dependiendo si existen
         torres o si no existen torres.
@@ -262,12 +344,20 @@ class ManipuladorDataframe:
         Nota: En caso de que no se cuente con informacion medida se usa el df directamente, si
         en caso contrario existen torres, se usa el diccionarion con los objetos Torre.
         """
-        if torres:
-            torre = next(iter(torres.values()))
-            serie_tiempo = torre.dataframe.index
-            return serie_tiempo
+        if isinstance(df, pd.DataFrame) or df is None:
+            if torres:
+                torre = next(iter(torres.values()))
+                serie_tiempo = torre.dataframe.index
+                return serie_tiempo
+            
+            serie_tiempo = df.index
+        else:
+            if torres:
+                torre = next(iter(torres.values()))
+                serie_tiempo = torre.dataframe.select("index").distinct().collect()
+                return serie_tiempo
         
-        serie_tiempo = df.index
+            serie_tiempo = df.select("index").distinct().collect()        
         return serie_tiempo
 
     def transform_energia_planta(self, energia_planta: pd.Series) -> pd.DataFrame:

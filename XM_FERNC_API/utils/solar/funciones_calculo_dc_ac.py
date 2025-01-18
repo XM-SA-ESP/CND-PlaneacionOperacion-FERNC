@@ -3,10 +3,10 @@ import xm_solarlib
 import pandas as pd
 from typing import List
 from xm_solarlib.pvsystem import PVSystem
-from utils.decoradores import capturar_excepciones
-from utils.manipulador_excepciones import CurvasExcepcion
-from utils.mensaje_constantes import MensajesSolar
-from infraestructura.models.solar.parametros import (
+from XM_FERNC_API.utils.decoradores import capturar_excepciones
+from XM_FERNC_API.utils.manipulador_excepciones import CurvasExcepcion
+from XM_FERNC_API.utils.mensaje_constantes import MensajesSolar
+from XM_FERNC_API.infraestructura.models.solar.parametros import (
     ParametrosTransversales,
     ParametrosModulo,
     ParametrosInversor,
@@ -43,9 +43,9 @@ class CalculoDCAC:
         Retorno:
         - pd.Series: Serie que representa la potencia de salida en CA del sistema fotovoltaico.
         """
-        energia_dc = self.calculo_potencia_dc(pvsys, lista_array, params_trans, params_modulo)
+        
+        energia_dc = self.calculo_potencia_dc(pvsys, lista_array, params_trans, params_modulo)        
         energia_ac = self.calculo_potencia_ac(energia_dc, params_inversor)
-
         energia_ac = energia_ac * params_inversor.NInv
 
         return energia_ac
@@ -69,10 +69,11 @@ class CalculoDCAC:
         Retorno:
         - List: Lista de DataFrames que representan la potencia de salida en CC para cada conjunto de parámetros.
         """
-        psi = params_modulo.Psi
-        resultado = pvsys.scale_voltage_current_power(tuple(lista_array), unwrap=False)
-        lista_resultados = []
+        psi = params_modulo.Psi        
+        resultado = pvsys.scale_voltage_current_power(tuple(lista_array), unwrap=False)        
+        lista_resultados = []        
         for df in resultado:
+
             df = df[["i_mp", "v_mp", "p_mp"]].copy()
             energia_dc = self.ajuste_potencia_perdidas(df, psi, params_trans.L)
             lista_resultados.append(energia_dc)

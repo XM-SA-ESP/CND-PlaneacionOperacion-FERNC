@@ -1,26 +1,75 @@
-import polars as pl
+import pandas as pd
 import os
+from typing import List
+import pyarrow.parquet as pq
 
 from io import BytesIO
 from polars import exceptions
-from pandas.core.frame import DataFrame as Pandas_Dataframe
 from pandas import ExcelWriter, Series
 from azure.storage.blob import BlobServiceClient
 from azure.storage.blob._blob_client import BlobClient
 from azure.core.exceptions import ResourceNotFoundError
 from azure.identity import ClientSecretCredential
 from azure.keyvault.secrets import SecretClient
+from pyspark.sql import SparkSession, DataFrame
 
+
+
+def generar_archivo_excel_y_subir_volumen( diccionario_hojas, nombre_archivo):
+    """
+    Esta función toma un diccionario de DataFrames o Series y un nombre de archivo,
+    y escribe cada DataFrame o Serie en una hoja separada de un archivo Excel.
+    Luego sube el archivo a Azure Blob Storage.
+
+    Parámetros:
+        diccionario_hojas (dict): Un diccionario donde cada clave es el nombre de la hoja,
+                                y cada valor es un DataFrame o Serie.
+        nombre_archivo (str): El nombre del archivo Excel que se creará.
+        cliente_azure (ClienteAzure): Una instancia de la clase ClienteAzure.
+
+    Retorna:
+        None
+    """
+    # Crear un buffer en memoria para el archivo Excel
+    excel_buffer = BytesIO()
+
+    # Escribir DataFrames o Series en el buffer
+    with ExcelWriter(excel_buffer, engine="xlsxwriter") as writer:
+        for nombre_hoja, datos in diccionario_hojas.items():
+            if isinstance(datos, Series):
+                # Si los datos son una Serie, conviértelos en un DataFrame
+                datos = datos.to_frame()
+            datos.to_excel(writer, sheet_name=nombre_hoja, index=False)
+
+    # Rebobinar el buffer al inicio
+    excel_buffer.seek(0)
+    ruta_archivo = os.path.join(os.environ['VOLUME'], nombre_archivo)        
+        
+    if os.path.exists(ruta_archivo):
+        spark = SparkSession.builder.getOrCreate()
+        if 'PYTEST_CURRENT_TEST' not in os.environ:
+            from pyspark.dbutils import DBUtils
+            dbutils = DBUtils(spark)
+            dbutils.fs.rm(ruta_archivo)
+
+    with open(ruta_archivo, "wb") as f:
+        f.write(excel_buffer.getvalue())
+
+    return None
+
+
+
+from pyspark.sql import DataFrame
 
 class ClienteAzure:
     def __init__(
         self,
-        blob: str,
+        blob: str
     ) -> None:
         self.blob = blob
         self.instancia_servicio_cliente = self.__instancia_cliente_azure_init()
         self.cliente_storage = self.__blob_storage_init()
-        self.archivo_blob = self.__archivo_blob_obtener()
+        self.archivo_blob = self.__archivo_blob_obtener()        
 
     def __instancia_cliente_azure_init(self) -> BlobServiceClient:
         """
@@ -82,7 +131,6 @@ class ClienteAzure:
             ResourceNotFoundError: Si el blob no se encuentra en el almacenamiento.
             AttributeError: Si el cliente no tiene el atributo para descargar el blob.
         """
-
         try:            
             archivo_blob = self.cliente_storage.download_blob()
             archivo_blob_bytes = BytesIO(archivo_blob.readall())
@@ -90,7 +138,7 @@ class ClienteAzure:
         except (ResourceNotFoundError, AttributeError):
             return BytesIO()
 
-    def archivo_leer(self) -> pl.DataFrame:
+    def archivo_leer(self) -> DataFrame:
         """
         Lee un archivo parquet desde 'archivo_blob' y devuelve un pandas DataFrame.
 
@@ -98,17 +146,17 @@ class ClienteAzure:
             self.archivo_blob (str): La ruta al archivo parquet.
 
         Restorna:
-            df (pandas.DataFrame): El archivo parquet cargado como un pandas DataFrame.
-            pl.DataFrame: Un DataFrame vacío si no hay datos en el archivo parquet.
+            df (DataFrame): El archivo parquet cargado como un DataFrame de Pyspark.
+            DataFrame: Un DataFrame vacío si no hay datos en el archivo parquet.
         """
 
-        try:
-            df = pl.read_parquet(self.archivo_blob)
+        try:            
+            df = pd.read_parquet(self.archivo_blob)
             return df
         except exceptions.NoDataError:
-            return pl.DataFrame()
+            return DataFrame()
 
-    def archivo_subir(self, df: Pandas_Dataframe, nombre_blob: str) -> None:
+    def archivo_subir(self, df: DataFrame, nombre_blob: str) -> None:
         """
         Sube un DataFrame de Pandas como un archivo Excel a un contenedor específico de Azure Blob Storage.
 

@@ -4,9 +4,9 @@ import xarray as xr
 
 from typing import Dict, Tuple
 
-from utils.eolica.dataclasses_eolica import Aerogenerador
-from utils.manipulador_excepciones import BaseExcepcion
-from utils.mensaje_constantes import MensajesEolica
+from XM_FERNC_API.utils.eolica.dataclasses_eolica import Aerogenerador
+from XM_FERNC_API.utils.manipulador_excepciones import BaseExcepcion
+from XM_FERNC_API.utils.mensaje_constantes import MensajesEolica
 
 DESCRIPCION = 'Descripci�n'
 
@@ -48,33 +48,28 @@ def crear_estructura_xarray(
 def crear_estructura_xarray_vectorizado(aerogeneradores: Dict, serie_tiempo: pd.DatetimeIndex) -> xr.Dataset:
     ids_turbinas = list(aerogeneradores.keys())
 
-    velocs = np.array([aero.df["VelocidadViento"].values for aero in aerogeneradores.values()])
-    direcs = np.array([aero.df["DireccionViento"].values for aero in aerogeneradores.values()])
-    temps = np.array([aero.df["Ta"].values for aero in aerogeneradores.values()])
-    dens = np.array([aero.df["DenBuje"].values for aero in aerogeneradores.values()])
+    # Extract data arrays using list comprehensions and convert to numpy arrays
+    velocs = np.array([aero.df["VelocidadViento"].to_numpy() for aero in aerogeneradores.values()])
+    direcs = 90 - np.array([aero.df["DireccionViento"].to_numpy() for aero in aerogeneradores.values()])
+    temps = np.array([aero.df["Ta"].to_numpy() for aero in aerogeneradores.values()])
+    dens = np.array([aero.df["DenBuje"].to_numpy() for aero in aerogeneradores.values()])
 
-    direcs = 90 - direcs
-
+    # Create the xarray Dataset
     ds = xr.Dataset(
         data_vars={
             'densidad': (['turbina', 'tiempo'], dens, {DESCRIPCION: 'Densidad a altura de cubo en [kg/m3].'}),
-            'temperatura_ambiente': (['turbina', 'tiempo'], temps, {DESCRIPCION: 'Temperatura ambiente a altura de cubo en [�C].'}),
+            'temperatura_ambiente': (['turbina', 'tiempo'], temps, {DESCRIPCION: 'Temperatura ambiente a altura de cubo en [°C].'}),
             'velocidad_viento': (['turbina', 'tiempo'], velocs, {DESCRIPCION: 'Velocidad del viento a altura de cubo en [m/s].'}),
-            'direccion_viento': (['turbina', 'tiempo'], direcs, {DESCRIPCION: 'Direcci�n del viento a altura de cubo en [�].'}),
+            'direccion_viento': (['turbina', 'tiempo'], direcs, {DESCRIPCION: 'Dirección del viento a altura de cubo en [°].'}),
         },
         coords={
-            'tiempo': (['tiempo'], serie_tiempo, {DESCRIPCION: 'Estampa temporal.'}),
-            'turbina': (['turbina'], ids_turbinas, {DESCRIPCION: 'Numeraci�n de turbinas.'}),
-        },
-        attrs=None
+            'tiempo': (['tiempo'], serie_tiempo.astype(str).to_numpy(), {DESCRIPCION: 'Estampa temporal.'}),
+            'turbina': (['turbina'], ids_turbinas, {DESCRIPCION: 'Numeración de turbinas.'}),
+        }
     )
-
-    if np.isnan(ds).any():
-        BaseExcepcion(
-            "se han encontrado valores NaN.",
-            "Creando estructura de xarray.",
-            MensajesEolica.Error.XARRAY.value,
-        )
+    
+    if ds.to_array().isnull().any():
+        raise ValueError("Error: El xarray contiene valores NaN.")
 
     return ds
 
@@ -89,19 +84,11 @@ def crear_estructura_curvas_xarray(aerogeneradores: Dict) -> xr.Dataset:
         - curvas_ds (xr.Dataset): XArray Dataset con las curvas para cada aerogenerador.
     """
     ids_turbinas = list(aerogeneradores.keys())
-    numero_aeros = len(ids_turbinas)
 
     cur_vel = np.vstack([np.array([data.SerieVcthCorregida for data in aero.curvas_fabricante]) for aero in aerogeneradores.values()])
     cur_pot = np.vstack([np.array([data.SeriePotencia for data in aero.curvas_fabricante]) for aero in aerogeneradores.values()])
     cur_coef = np.vstack([np.array([data.SerieCoeficiente for data in aero.curvas_fabricante]) for aero in aerogeneradores.values()])
-
-    numero_curvas = len(cur_vel[0]) # Obtener el numero de curvas del fabricante
-    
-    # Reshape en arrays de dimenciones 50x25
-    cur_vel = cur_vel.reshape(numero_aeros, numero_curvas)
-    cur_pot = cur_pot.reshape(numero_aeros, numero_curvas)
-    cur_coef = cur_coef.reshape(numero_aeros, numero_curvas)
-
+    numero_curvas = cur_vel.shape[1]
     curvas_ds = xr.Dataset(
         data_vars={
             'cur_vel': (['turbina', 'numero_curvas'], cur_vel, {DESCRIPCION: 'Curvas velocidad.'}),
@@ -109,7 +96,7 @@ def crear_estructura_curvas_xarray(aerogeneradores: Dict) -> xr.Dataset:
             'cur_coef': (['turbina', 'numero_curvas'], cur_coef, {DESCRIPCION: 'Curvas coeficiente.'}),
         },
         coords={
-            'turbina': (['turbina'], ids_turbinas, {DESCRIPCION: 'Numeraci�n de turbinas.'}),
+            'turbina': (['turbina'], ids_turbinas, {DESCRIPCION: 'Numeración de turbinas.'}),
             'numero_curvas': np.arange(numero_curvas),
         },
         attrs=None

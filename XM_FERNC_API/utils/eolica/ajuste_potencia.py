@@ -2,8 +2,86 @@ import scipy
 import pandas as pd
 import numpy as np
 import xarray as xr
+from pyspark.sql.functions import pandas_udf, PandasUDFType
+from pyspark.sql.types import ArrayType, DoubleType
 
-from infraestructura.models.eolica.parametros import ParametrosTransversales
+from XM_FERNC_API.infraestructura.models.eolica.parametros import ParametrosTransversales
+
+
+
+
+# Función para calcular la potencia basada en la velocidad
+def calcular_potencia(temp_vel_ti, curvas_xarray, turbina_id):
+    curvas = curvas_xarray.sel(turbina=turbina_id)
+    cur_vel, cur_pot = curvas["cur_vel"].values, curvas["cur_pot"].values
+    potencia = scipy.interpolate.splev(x=temp_vel_ti, tck=scipy.interpolate.splrep(cur_vel, cur_pot, k=3))
+    return potencia
+
+
+def calculate_pot(dataset, curvas_xarray, num_turbinas=15):
+    # Extract the necessary velocity data
+    temp_vel_ti = dataset
+    
+    # Function to perform cubic spline interpolation and calculate power
+    def _spline_cubico(i):
+        curvas = curvas_xarray.sel(turbina=i+1)
+        cur_vel, cur_pot = curvas["cur_vel"].values, curvas["cur_pot"].values
+        return float(scipy.interpolate.splev(x=temp_vel_ti[i], tck=scipy.interpolate.splrep(cur_vel, cur_pot, k=3)))
+
+    # Apply the interpolation function across all specified turbines
+    pot = np.array([_spline_cubico(i) for i in range(num_turbinas)])
+    
+    return pot
+
+
+def potencia_vectorizado_udf(
+    df_data,
+    caracteristicas_tij: pd.DataFrame,
+    estructura_xarray: xr.Dataset,
+    curvas_xarray: xr.Dataset,
+    param_trans: ParametrosTransversales,
+    ohm: float
+):
+    kpc = param_trans.Kpc
+    kt = param_trans.Kt
+    kin = param_trans.Kin
+    voltaje = param_trans.Voltaje
+    pot_col = 'velocidad_estela'    
+    @pandas_udf(ArrayType(DoubleType()))
+    def potencia_udf(keys: pd.Series, 
+                    estructura_x_info:pd.Series,                    
+                    densidad:pd.Series) -> pd.Series:
+        # Interpolación de potencia
+        result = []
+        for i in range(keys.shape[0]):            
+            potencia = calculate_pot(estructura_x_info.iloc[i][pot_col], curvas_xarray, len(curvas_xarray.turbina))
+            
+            # Corrección por temperatura
+            potencia = np.where(estructura_x_info.iloc[i]['temperatura_ambiente'] < caracteristicas_tij['t_min'].values, 0.0, potencia)
+            potencia = np.where(estructura_x_info.iloc[i]['temperatura_ambiente'] > caracteristicas_tij['t_max'].values, 0.0, potencia)
+            
+            # Corrección de densidad
+            potencia = potencia * caracteristicas_tij['densidad'].values / densidad.iloc[i] ##
+
+            # # Pérdidas en el cableado
+            potencia = perdidas_cableado(voltaje * 1000, ohm, caracteristicas_tij['dist_pcc'].values, potencia)
+
+            # # Pérdidas en la frontera comercial
+            potencia = perdidas_frontera_comercial(potencia, kpc, kt, kin)
+
+            # # Filtro de potencia nominal
+            potencia = np.where(potencia >= caracteristicas_tij['p_nominal'].values, caracteristicas_tij['p_nominal'].values, potencia)
+
+            # # Filtro de valores negativos
+            potencia = np.where(potencia < 0.0, 0.0, potencia)
+            result.append(potencia)
+        return pd.Series(result)
+   
+    result = df_data.withColumn("potencia", potencia_udf("key", "estructura_x_info", "densidad"))
+    potencia_np = result.select("potencia").collect()
+    potencia_array = np.array([row.potencia for row in potencia_np])
+    estructura_xarray['potencia'] = (['turbina', 'tiempo'], potencia_array.T, {'Descripción': 'Potencia AC de cada turbina en [kW].'})
+    return estructura_xarray
 
 
 def potencia_vectorizado(

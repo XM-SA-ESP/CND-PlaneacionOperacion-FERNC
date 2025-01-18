@@ -2,14 +2,14 @@ import numpy as np
 
 from typing import Tuple
 
-from utils.eolica.distancia import distancia_geodesica
-from utils.eolica.dataclasses_eolica import Aerogenerador
+from XM_FERNC_API.utils.eolica.distancia import distancia_geodesica
+from XM_FERNC_API.utils.eolica.dataclasses_eolica import Aerogenerador
 
 
 def calculo_x_dist(
     theta: float,
-    aero1: Aerogenerador,
-    aero2: Aerogenerador,
+    aero1,
+    aero2,
     x_elevacion: float,
 ) -> np.float64:
     """
@@ -27,20 +27,20 @@ def calculo_x_dist(
     vector_1 = np.array([-np.cos(theta), -np.sin(theta), 0])
 
     x = distancia_geodesica(
-        aero1.latitud,
-        aero1.longitud,
-        aero1.elevacion,
-        aero1.latitud,
-        aero2.longitud,
-        aero1.elevacion,
+        aero1["latitud"],
+        aero1["longitud"],
+        aero1["elevacion"],
+        aero1["latitud"],
+        aero2["longitud"],
+        aero1["elevacion"],
     )
     y = distancia_geodesica(
-        aero1.latitud,
-        aero1.longitud,
-        aero1.elevacion,
-        aero2.latitud,
-        aero1.longitud,
-        aero1.elevacion,
+        aero1["latitud"],
+        aero1["longitud"],
+        aero1["elevacion"],
+        aero2["latitud"],
+        aero1["longitud"],
+        aero1["elevacion"],
     )
     slon_i_j, slat_i_j = obtener_slon_slat(aero1, aero2)
 
@@ -58,7 +58,7 @@ def calculo_x_dist(
 
 
 def obtener_slon_slat(
-    aero1: Aerogenerador, aero2: Aerogenerador
+    aero1, aero2
 ) -> Tuple[float, float]:
     """
     Calculo para la obtencion de las distancias slon y slat en metros para cada
@@ -72,8 +72,8 @@ def obtener_slon_slat(
             - slon_i_j (float): Longitud en metros entre i, j.
             - slat_i_j (float): Latitud en metros entre i, j.
     """
-    x_lon_i_j = aero2.longitud - aero1.longitud
-    x_lat_i_j = aero2.latitud - aero1.latitud
+    x_lon_i_j = aero2["longitud"] - aero1["longitud"]
+    x_lat_i_j = aero2["latitud"] - aero1["latitud"]
     slon_i_j = np.sign(x_lon_i_j)
     slat_i_j = np.sign(x_lat_i_j)
 

@@ -2,43 +2,43 @@ import gc
 import os
 from ctypes import ArgumentError
 
-from dominio.servicio.azure.cliente_az_servicebus import ClienteServiceBusTransversal
-from infraestructura.models.eolica.parametros import JsonModelEolica
-from infraestructura.models.solar.parametros import JsonModelSolar
-from infraestructura.calculos.eolica.calculo_eolica import realizar_calculo_eolicas
-from infraestructura.calculos.solar.calculo_solar import realizar_calculo_solares
-from infraestructura.models.mensaje_azure import RecibirMensajeAzure
-from infraestructura.models.respuesta import Respuesta
-from utils.consumidor import ConsumirApiEstado
-
-
-# De acuerdo al tipo de mensaje se llama un metodo o el otro
-switch_dict = {
-    0: lambda param: realizar_calculo_solares(param),
-    1: lambda param: realizar_calculo_eolicas(param),
-}
+from XM_FERNC_API.dominio.servicio.azure.cliente_az_servicebus import ClienteServiceBusTransversal
+from XM_FERNC_API.infraestructura.models.eolica.parametros import JsonModelEolica
+from XM_FERNC_API.infraestructura.models.solar.parametros import JsonModelSolar
+from XM_FERNC_API.infraestructura.calculos.eolica.calculo_eolica import realizar_calculo_eolicas
+from XM_FERNC_API.infraestructura.calculos.solar.calculo_solar import realizar_calculo_solares
+from XM_FERNC_API.infraestructura.models.mensaje_azure import RecibirMensajeAzure
+from XM_FERNC_API.infraestructura.models.respuesta import Respuesta
+from XM_FERNC_API.utils.consumidor import ConsumirApiEstado
 
 
 def procesar_mensaje(mensaje_json: str) -> None:
-    # De acuerdo al tipo de mensaje se llama un metodo o el otro
-    mensaje_recibido = RecibirMensajeAzure.model_validate_json(
-        mensaje_json, strict=False
-    )
+    try:
+        # De acuerdo al tipo de mensaje se llama un metodo o el otro
+        switch_dict = {
+            0: lambda param: realizar_calculo_solares(param),
+            1: lambda param: realizar_calculo_eolicas(param),
+        }
+        mensaje_recibido = RecibirMensajeAzure.model_validate_json(
+            mensaje_json, strict=False
+        )
 
-    tipo_mensaje = mensaje_recibido.TipoMensaje
-    parametros = mensaje_recibido.CuerpoMensaje
+        tipo_mensaje = mensaje_recibido.TipoMensaje
+        parametros = mensaje_recibido.CuerpoMensaje
 
-    funcion_seleccionada = switch_dict.get(
-        tipo_mensaje, lambda param: pordefento(param)
-    )
-    resultado = funcion_seleccionada(parametros)
-    enviar_resultados(resultado, parametros)  # Enviar información al FE/Integración
+        funcion_seleccionada = switch_dict.get(
+            tipo_mensaje, lambda param: pordefento(param)
+        )
+        resultado = funcion_seleccionada(parametros)
+        enviar_resultados(resultado, parametros)  # Enviar información al FE/Integración
 
-    print("Proceso finalizado.")
+        print("Proceso finalizado.")
 
-    # Invocar la recolección de basura manualmente
-    gc.collect()
-
+        # Invocar la recolección de basura manualmente
+        gc.collect()
+    except Exception as e:
+       print("Excepción metodo procesar_mensaje")
+       print(e)
 
 def enviar_resultados(
     resultado: Respuesta, parametros: JsonModelSolar | JsonModelEolica
@@ -67,15 +67,18 @@ def enviar_resultados(
         '''
         # Enviar resultados al FE
         ws_estado_fe.enviar_resultados(mensaje=json_string, exitoso=True)
-
+        
         #Enviar resultados al service bus transversal | SUICC
         enviar_mensaje_sb_transversal(parametros.IdAplicacion, json_string)
 
 
 def enviar_mensaje_sb_transversal(id_aplicacion: str, json_resultado: str):
    if id_aplicacion:
-       servicebus_transversal = ClienteServiceBusTransversal(os.environ.get("ENVIRONMENT"))
-       servicebus_transversal.enviar_mensaje_a_servicebus(cuerpo_mensaje=json_resultado, id_aplicacion=id_aplicacion)
+       try:
+        servicebus_transversal = ClienteServiceBusTransversal(os.environ.get("ENVIRONMENT"))
+        servicebus_transversal.enviar_mensaje_a_servicebus(cuerpo_mensaje=json_resultado, id_aplicacion=id_aplicacion)
+       except Exception as e:
+          print(e)
 
 
 def pordefento(tipo_mensaje: int):

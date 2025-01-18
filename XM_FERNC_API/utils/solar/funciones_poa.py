@@ -1,7 +1,7 @@
 import xm_solarlib
 import pandas as pd
 
-from utils.solar import data_constants
+from XM_FERNC_API.utils.solar import data_constants
 
 
 def poa_bifacial(df_dni_dhi, montura, params_trans, params_inv, params_array):
