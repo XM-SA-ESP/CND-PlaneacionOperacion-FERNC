@@ -1,9 +1,9 @@
 import copy
 from typing import Dict, Tuple
 
-from infraestructura.models.eolica.parametros import JsonModelEolica
-from utils.manipulador_dataframe import ManipuladorDataframe
-from utils.eolica.dataclasses_eolica import Aerogenerador, Modelo, Pcc
+from XM_FERNC_API.infraestructura.models.eolica.parametros import JsonModelEolica
+from XM_FERNC_API.utils.manipulador_dataframe import ManipuladorDataframe
+from XM_FERNC_API.utils.eolica.dataclasses_eolica import Aerogenerador, Modelo, Pcc
 
 
 class ManipuladorEstructura:

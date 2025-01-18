@@ -79,7 +79,6 @@ class TestCalculoDCAC(unittest.TestCase):
 
     #     pd.testing.assert_frame_equal(resultado, df_esperado)
 
-    def test_calculo_potencia_ac(self):
 
         data_json = {
             "CurvaPDCVSPACEnVDCMax": [

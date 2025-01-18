@@ -3,9 +3,14 @@ import polars as pl
 from xm_solarlib.location import Location
 from pandas.core.frame import DataFrame as Pandas_Dataframe
 
-from utils.solar.calculos_polars import calculo_dhi
-from utils.solar import data_constants
+from XM_FERNC_API.utils.solar.calculos_polars import calculo_dhi
+from XM_FERNC_API.utils.solar import data_constants
+import time
 
+def timer(start,end):
+   hours, rem = divmod(end-start, 3600)
+   minutes, seconds = divmod(rem, 60)
+   print("{:0>2}:{:0>2}:{:05.2f}".format(int(hours),int(minutes),seconds))
 class CalculoDniDhi:
     def __init__(self) -> None:
         return
@@ -99,7 +104,7 @@ class CalculoDniDhi:
         Retorno:
         - Pandas_Dataframe: Un DataFrame de pandas que contiene la radiación difusa normalizada (DHI) calculada.
         """
-
+        #00:00:00.57                      
         serie_dni[data_constants.COLUMN_GHI] = calculo_df["GHI"]
         serie_dni["zenith"] = calculo_df["zenith"]
 
@@ -122,7 +127,5 @@ class CalculoDniDhi:
         serie_dni.loc[serie_dni["zenith"] > 87, ["dni", "dhi"]] = 0
 
         # Filtrar dni y dhi a cero si dni <= 0 y dhi < 0
-        mask = (serie_dni["dni"] <= 0) & (serie_dni["dhi"] < 0)
-        serie_dni.loc[mask, ["dni", "dhi"]] = 0.0
-
+        serie_dni.loc[(serie_dni["dni"] <= 0) & (serie_dni["dhi"] < 0), ["dni", "dhi"]] = 0.0
         return serie_dni

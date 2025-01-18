@@ -1,9 +1,9 @@
 import os
-from utils.consumidor import ConsumirApiEstado
-from dominio.servicio.eolica.servicio_eolicas import ServicioEolicas
-from dominio.servicio.azure.cliente_az_servicebus import ClienteServiceBusTransversal
-from infraestructura.models.eolica.parametros import JsonModelEolica
-from utils.manipulador_excepciones import ManipuladorExcepciones
+from XM_FERNC_API.utils.consumidor import ConsumirApiEstado
+from XM_FERNC_API.dominio.servicio.eolica.servicio_eolicas import ServicioEolicas
+from XM_FERNC_API.dominio.servicio.azure.cliente_az_servicebus import ClienteServiceBusTransversal
+from XM_FERNC_API.infraestructura.models.eolica.parametros import JsonModelEolica
+from XM_FERNC_API.utils.manipulador_excepciones import ManipuladorExcepciones
 
 def realizar_calculo_eolicas(params: JsonModelEolica):
     """
@@ -16,7 +16,6 @@ def realizar_calculo_eolicas(params: JsonModelEolica):
         response: Objeto resultando del llamada del método 'ejecutar_calculos' del servicio de eólicas.
     """
     servicio = ServicioEolicas()
-
     resultado = servicio.ejecutar_calculos(params)
 
     if isinstance(resultado, ManipuladorExcepciones):

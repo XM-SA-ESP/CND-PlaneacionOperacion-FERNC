@@ -122,7 +122,7 @@ class TestCorregirCurvas(unittest.TestCase):
         ])
 
         result = self.corregir_curva_instancia.corregir_curvas_sin_torres(
-            self.params, df)
+            df, {}, {})
 
         self.assertIsNone(result)
 

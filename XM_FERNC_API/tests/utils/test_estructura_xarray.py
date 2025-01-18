@@ -5,7 +5,8 @@ import numpy as np
 
 from utils.estructura_xarray import (
     crear_estructura_xarray_vectorizado,
-    crear_estructura_curvas_xarray
+    crear_estructura_curvas_xarray,
+    crear_estructura_xarray
 )
 from utils.eolica.dataclasses_eolica import Aerogenerador, Modelo
 from infraestructura.models.eolica.parametros import CurvasDelFabricante
@@ -95,3 +96,25 @@ class TestAjustePotencia(unittest.TestCase):
         assert isinstance(resultado, xr.Dataset)
         assert all(coord in resultado.coords for coord in coords_esperadas)
         assert all(data_var in resultado.data_vars for data_var in data_vars_esperadas)
+
+    def test_crear_estructura_xarray(self):
+        # Actuar
+        lon_data, lat_data = crear_estructura_xarray(self.serie_tiempo, self.aerogeneradores)
+
+        # Afirmar que las dimensiones son correctas
+        self.assertEqual(lon_data.shape, (len(self.serie_tiempo), len(self.aerogeneradores)))
+        self.assertEqual(lat_data.shape, (len(self.serie_tiempo), len(self.aerogeneradores)))
+
+        # Afirmar que los nombres de las dimensiones son correctos
+        self.assertListEqual(list(lon_data.dims), ["fecha", "aero_id"])
+        self.assertListEqual(list(lat_data.dims), ["fecha", "aero_id"])
+
+        # Afirmar que las coordenadas son correctas
+        self.assertTrue(np.array_equal(lon_data.coords['fecha'], self.serie_tiempo))
+        self.assertTrue(np.array_equal(lat_data.coords['fecha'], self.serie_tiempo))
+        self.assertListEqual(list(lon_data.coords['aero_id']), list(self.aerogeneradores.keys()))
+        self.assertListEqual(list(lat_data.coords['aero_id']), list(self.aerogeneradores.keys()))
+
+        # Afirmar que los valores están inicializados a cero
+        np.testing.assert_array_equal(lon_data.values, 0)
+        np.testing.assert_array_equal(lat_data.values, 0)

@@ -1,7 +1,7 @@
 from typing import List, Optional
 from pydantic import BaseModel
 
-from infraestructura.models.parametros_base import BaseParametrosTransversales
+from XM_FERNC_API.infraestructura.models.parametros_base import BaseParametrosTransversales
 
 
 class CurvasDelFabricante(BaseModel):

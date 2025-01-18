@@ -1,4 +1,5 @@
 import os
+import sys
 import functools
 import multiprocessing
 
@@ -9,47 +10,95 @@ import xarray as xr
 
 from typing import Dict, List, Tuple
 
-from infraestructura.models.eolica.parametros import (
+from XM_FERNC_API.infraestructura.models.eolica.parametros import (
     JsonModelEolica,
     ParametrosTransversales,
 )
-from infraestructura.models.respuesta import Respuesta, Resultado
-from dominio.servicio.azure_blob.cliente_azure import ClienteAzure
+from XM_FERNC_API.infraestructura.models.respuesta import Respuesta, Resultado
+from XM_FERNC_API.dominio.servicio.azure_blob.cliente_azure import ClienteAzure
 
-from utils import workers
-from utils.decoradores import capturar_excepciones
-from utils.mensaje_constantes import MensajesEolica
-from utils.consumidor import ConsumirApiEstado
-from utils.estructura_xarray import (
+from XM_FERNC_API.utils import workers
+from XM_FERNC_API.utils.decoradores import capturar_excepciones
+from XM_FERNC_API.utils.mensaje_constantes import MensajesEolica
+from XM_FERNC_API.utils.consumidor import ConsumirApiEstado
+from XM_FERNC_API.utils.estructura_xarray import (
     crear_estructura_xarray_vectorizado,
     crear_estructura_curvas_xarray
 )
-from utils.manipulador_excepciones import BaseExcepcion, CalculoExcepcion, ManipuladorExcepciones
-from utils.manipulador_dataframe import ManipuladorDataframe
-from utils.manipulador_modelos import ManipuladorModelos
-from utils.eolica.manipulador_estructura import ManipuladorEstructura
-from utils.eolica.funciones_calculo_temp_presion_densidad import (
+from XM_FERNC_API.utils.manipulador_excepciones import BaseExcepcion, CalculoExcepcion, ManipuladorExcepciones
+from XM_FERNC_API.utils.manipulador_dataframe import ManipuladorDataframe
+from XM_FERNC_API.utils.manipulador_modelos import ManipuladorModelos
+from XM_FERNC_API.utils.eolica.manipulador_estructura import ManipuladorEstructura
+from XM_FERNC_API.utils.eolica.funciones_calculo_temp_presion_densidad import (
     CalculoTempPresionDensidad,
 )
-from utils.eolica.funciones_corregir_curvas import CorregirCurvas
-from utils.eolica.funciones_calculo_pcc import CalculoPcc
-from utils.eolica.funciones_ordenamiento import Ordenamiento
-from utils.eolica.funciones_correccion_velocidad_parque_eolico import (
+from XM_FERNC_API.utils.eolica.funciones_corregir_curvas import CorregirCurvas
+from XM_FERNC_API.utils.eolica.funciones_calculo_pcc import CalculoPcc
+from XM_FERNC_API.utils.eolica.funciones_ordenamiento import Ordenamiento
+from XM_FERNC_API.utils.eolica.funciones_correccion_velocidad_parque_eolico import (
     CorreccionVelocidadParque,
+    serialize_aerogenerador,
+    serialize_modelo
 )
-from utils.eolica.ajuste_potencia import potencia_vectorizado
-from utils.eolica.dataclasses_eolica import Torre
-from utils.generar_archivo_excel import GenerarArchivoExcel
-
+from XM_FERNC_API.utils.eolica.ajuste_potencia import potencia_vectorizado, potencia_vectorizado_udf
+from XM_FERNC_API.utils.eolica.dataclasses_eolica import Torre
+from XM_FERNC_API.utils.generar_archivo_excel import GenerarArchivoExcel
+from XM_FERNC_API.dominio.servicio.pyspark_service.pyspark_session import generar_sesion
+from pyspark.sql import SparkSession, DataFrame
+from pyspark.sql.functions import col, pandas_udf, PandasUDFType
+from pyspark.sql.types import StructType, StructField, StringType, ArrayType, FloatType, BooleanType, IntegerType, DoubleType, MapType
+from pyspark.sql.functions import udf
+from pyspark.sql import Row
 import time
-
+from logging import INFO, getLogger, StreamHandler, Formatter
+from azure.monitor.opentelemetry import configure_azure_monitor
+from pyspark.sql import SparkSession
 def timer(start,end):
    hours, rem = divmod(end-start, 3600)
    minutes, seconds = divmod(rem, 60)
-   print("{:0>2}:{:0>2}:{:05.2f}".format(int(hours),int(minutes),seconds))
+   return "{:0>2}:{:0>2}:{:05.2f}".format(int(hours),int(minutes),seconds)
+from XM_FERNC_API.utils.databricks_logger import DbLogger, timer
 
+
+def convert_xarray(xarra, time):
+    ds_dict = xarra.sel(tiempo=time).to_dict()
+
+    # Manually reformat the dictionary to use lists
+    def reformat_dict(d):
+        if isinstance(d, dict):
+            if 'data' in d:
+                return d['data']
+            return {k: reformat_dict(v) for k, v in d.items()}
+        return d
+
+    # Apply the reformatting
+    reformatted_ds_dict = {k: reformat_dict(v) for k, v in ds_dict['data_vars'].items()}
+    return reformatted_ds_dict
+
+arg_list_schema = StructType([
+    StructField("fecha", StringType(), True),
+    StructField("ordenamiento", ArrayType(IntegerType()), True),
+    StructField("h_buje_promedio", DoubleType(), True),
+    StructField("offshore", BooleanType(), True),
+    StructField("z_o1", DoubleType(), True),
+    StructField("z_o2", DoubleType(), True)
+    ])
+
+xarray_schema = StructType([
+    StructField("temperatura_ambiente", ArrayType(DoubleType())),
+    StructField("velocidad_estela", ArrayType(DoubleType())),
+    StructField("velocidad_viento", ArrayType(DoubleType())),
+    StructField("velocidad_grandes_parques", ArrayType(DoubleType()))
+    ])
+
+potencia_schema = StructType([
+    StructField("key", StringType(), True),
+    StructField("estructura_x_info", xarray_schema, True),          
+    StructField("densidad", ArrayType(DoubleType()))
+    ])
 
 class ServicioEolicas:
+    
     def __init__(self) -> None:
         self.manipulador_df = ManipuladorDataframe()
         self.manipulador_modelos = ManipuladorModelos()
@@ -59,11 +108,15 @@ class ServicioEolicas:
         self.calculo_pcc = CalculoPcc()
         self.ordenamiento = Ordenamiento()
         self.correccion_parques = CorreccionVelocidadParque()
-        self.generar_archivo = GenerarArchivoExcel(self.manipulador_df)
+        self.generar_archivo = GenerarArchivoExcel(self.manipulador_df, 1)
 
         self.cliente_azure = None
+        self.sesion_spark = generar_sesion()
+        
+        self.logger_info = DbLogger('info')
 
-    def ejecutar_calculos(self, params: JsonModelEolica) -> Respuesta:
+
+    def ejecutar_calculos(self, params: JsonModelEolica):
         """
         Método principal que ejecuta los cálculos y arroja los resultados del proceso completo para plantas eólicas.
         El proceso tiene 2 posibilidades de ejecución:
@@ -78,6 +131,8 @@ class ServicioEolicas:
             resultado: Objeto de tipo Respuesta que contiene el resultado final de la EDA, la lista de valores de la ENFIC por cada periodo de la serie y el nombre del archivo
             subido al blob storage con todos los resultados por cada fila de las series cargadas según sea el caso.
         """
+        self.logger_info.initialize_logger()
+        
         print(f"Nombre planta: {params.ParametrosTransversales.NombrePlanta}")
 
         DESCRIPCION = "Descripción"
@@ -86,16 +141,16 @@ class ServicioEolicas:
             proceso="EstadoCalculo", conexion_id=ID_CONEXION, pasos_totales=6
         )
         params_trans = params.ParametrosTransversales
-        offshore = params_trans.Offshore
+        offshore = params_trans.Offshore        
         promedio_ohm = self.__obtener_promedio_resistencia(params)
         z_o1, z_o2, cre = self.__obtener_z_cre_values(offshore)
-        POOL = None
 
         try:
-            if params_trans.InformacionMedida:
-
-                params, torres = self.actualizar_aerogenerador_a_torre_cercana(params)
-
+            start_global = time.time()
+            print("params_trans.InformacionMedida")
+            print(params_trans.InformacionMedida)
+            if params_trans.InformacionMedida:                
+                params, torres = self.actualizar_aerogenerador_a_torre_cercana(params)                
                 modelos, aerogeneradores = (
                     self.manipulador_estructura.crear_dict_modelos_aerogeneradores(
                         params
@@ -114,7 +169,6 @@ class ServicioEolicas:
                 self.ajuste_curvas.corregir_curvas_con_torre(
                     torres, modelos, aerogeneradores
                 )
-
                 aerogeneradores = self.manipulador_estructura.agregar_pcc(
                     params, aerogeneradores
                 )
@@ -133,6 +187,7 @@ class ServicioEolicas:
                         params
                     )
                 )
+                
                 diccionario_resultado = (
                     self.ejecutar_calculo_temperatura_presion_densidad(
                         dataframe=df
@@ -140,121 +195,139 @@ class ServicioEolicas:
                 )
                 df = diccionario_resultado["dataframe"]
                 serie_tiempo = self.manipulador_df.obtener_serie_tiempo_eolica(df=df)
-
-                self.ajuste_curvas.corregir_curvas_sin_torres(params, df)
-
+                
+                self.ajuste_curvas.corregir_curvas_sin_torres(df, modelos, aerogeneradores)
+                
                 aerogeneradores = self.manipulador_estructura.agregar_pcc(
                     params, aerogeneradores
                 )
                 aerogeneradores = self.calculo_pcc.calculo_pcc_aerogenerador(
                     params, aerogeneradores
                 )
-
                 aerogeneradores = self.__asignar_df_aerogeneradores(
                     aerogeneradores, df=df
                 )
+
 
             print("Ordenamiento")
             cae_instancia.consumir_api_estado(
                 MensajesEolica.Estado.ORDENAMIENTO.value, True
             )
-            start = time.time()
-
+            start = time.time()                        
             dict_ordenamiento = self.ordenamiento.ordenamiento_vectorizado(
-                aerogeneradores, len(serie_tiempo)
-            )
+                aerogeneradores, len(serie_tiempo), self.sesion_spark
+            )                                  
+    
+            self.logger_info.send_logg(params.ParametrosTransversales.NombrePlanta + " Ordenamiento ", start)            
 
-            end = time.time()
-            timer(start, end)
-
-            lista_ordenamiento = []
-
-            # Crear lista de ordenamientos por estampa
-            for df in dict_ordenamiento.values():
-                lista_ordenamiento.append(df["id_turbina"].to_list())
-
-            h_buje_promedio = self.correccion_parques.calcular_h_buje_promedio(
-                modelos, aerogeneradores
-            )
-            n_turbinas = len(aerogeneradores.keys())
-            caracteristicas_df = self.__caracteristicas_tij(aerogeneradores, modelos)
-            estructura_xarray = self.__estructura_xarray_vectorizado(
-                aerogeneradores, serie_tiempo
-            )
-
-            args_list = self.__crear_lista_argumentos_correcciones(
-                aerogeneradores,
-                modelos,
-                h_buje_promedio,
-                offshore,
-                z_o1,
-                z_o2,
-                serie_tiempo,
-                lista_ordenamiento,
-            )
-
-            cantidad_cpu = os.cpu_count() - 1
-            POOL = multiprocessing.Pool(processes=cantidad_cpu)
-            print(f"os.cpu_count() {os.cpu_count()}")
-            CHUNKS = self.__chunksize(n_workers=cantidad_cpu, len_iterable=len(serie_tiempo))
-            print(f"CHUNKS:{CHUNKS}")
-
+            
             print("Correccion parques")
-            cae_instancia.consumir_api_estado(MensajesEolica.Estado.PARQUES.value, True)
+            cae_instancia.consumir_api_estado(MensajesEolica.Estado.PARQUES.value, True)            
             start = time.time()
+            
+            caracteristicas_df = self.__caracteristicas_tij(aerogeneradores, modelos)
+
+            estructura_xarray = self.__estructura_xarray_vectorizado(aerogeneradores, serie_tiempo)            
             if offshore:
+                aerogeneradores_serialized = {key: serialize_aerogenerador(value) for key, value in aerogeneradores.items()}
+                aerogeneradores_broadcast = self.sesion_spark.sparkContext.broadcast(aerogeneradores_serialized)
+                modelos_serialized = {key: serialize_modelo(value) for key, value in modelos.items()}
+                modelos_broadcast = self.sesion_spark.sparkContext.broadcast(modelos_serialized)
+                lista_ordenamiento = []
 
-                for resultado in POOL.imap(
-                    workers.correcciones_worker, args_list, chunksize=CHUNKS
-                ):
+
+                for df in dict_ordenamiento.values():
+                    lista_ordenamiento.append(df["id_turbina"].to_list())                
+                h_buje_promedio = self.correccion_parques.calcular_h_buje_promedio(
+                    modelos, aerogeneradores
+                )                
+                
+                args_list = self.__crear_lista_argumentos_correcciones(
+                    h_buje_promedio,
+                    offshore,
+                    z_o1,
+                    z_o2,
+                    serie_tiempo,
+                    lista_ordenamiento,
+                )
+                args_list_df = self.sesion_spark.createDataFrame(args_list, arg_list_schema)
+                result_array= workers.new_correcction(args_list_df, aerogeneradores_broadcast, modelos_broadcast)                
+                for row in result_array:
                     self.__asignar_valores_aerogeneradores(
-                        resultado, aerogeneradores, columna="VelocidadViento"
-                    )
-                vectores_velocidades = self.__crear_lista_vectores_velocidades(
-                    aerogeneradores, serie_tiempo
-                )
-                estructura_xarray["velocidad_grandes_parques"] = (
-                    ["turbina", "tiempo"],
-                    np.array(vectores_velocidades).T,
-                    {
-                        "Descripción": "Velocidad del viento perturbada por efecto de grandes parques en [m/s]."
-                    },
-                )
-
+                        row['result'], aerogeneradores, columna="VelocidadViento"
+                    )                    
+                vectores_velocidades = self.__crear_lista_vectores_velocidades(aerogeneradores, serie_tiempo)
+                data = np.array(vectores_velocidades).T
+              
             else:
-                estructura_xarray["velocidad_grandes_parques"] = (
-                    ["turbina", "tiempo"],
-                    estructura_xarray["velocidad_viento"].values,
-                    {
-                        DESCRIPCION: "Velocidad del viento perturbada por efecto de grandes parques en [m/s]."
-                    },
-                )
+                data = estructura_xarray["velocidad_viento"].values
+           
 
-            end = time.time()
-            timer(start, end)
+            estructura_xarray["velocidad_grandes_parques"] = (
+                ["turbina", "tiempo"],
+                data,
+                {
+                    "Descripción": "Velocidad del viento perturbada por efecto de grandes parques en [m/s]."
+                }
+            )
+            
+            n_turbinas = len(aerogeneradores.keys())
+            curvas_xarray = self.__estructura_xarray_curvas(aerogeneradores)
 
+            direccion_viento_t = estructura_xarray['direccion_viento'].values
+            velocidad_grandes_parques_t = estructura_xarray['velocidad_grandes_parques'].values
+            velocidad_viento_t = estructura_xarray['velocidad_viento'].values
+            
+            dict_keys = list(dict_ordenamiento.keys())
+            # Use a list comprehension directly to create the list of dictionaries
+            def create_estructura_info(index):
+                return {"direccion_viento": direccion_viento_t.T[index].tolist(),
+                        "velocidad_viento": velocidad_viento_t.T[index].tolist(),
+                        "velocidad_grandes_parques":  velocidad_grandes_parques_t.T[index].tolist()}
+
+            dict_keys = list(dict_ordenamiento.keys())
+            densidad = pd.DataFrame(
+                {key: value.df["DenBuje"] for key, value in aerogeneradores.items()}
+            ) 
+
+
+            data = [[str(val), dict_ordenamiento[val].to_dict(orient='list'), create_estructura_info(i), list(densidad.loc[val])]for i, val in enumerate(dict_keys)] ## slow, optim 297 - 319 
+            turbine_info = StructType([StructField("Elevacion_m", ArrayType(DoubleType())),
+                                        StructField("factor_reordenamiento", ArrayType(DoubleType())),
+                                        StructField("latitud_m", ArrayType(DoubleType())),
+                                        StructField("longitud_m", ArrayType(DoubleType())),
+                                        StructField("id_turbina", ArrayType(IntegerType()))])
+
+            estructura_info = StructType([StructField("direccion_viento", ArrayType(DoubleType())),
+                                        StructField("velocidad_viento", ArrayType(DoubleType())),
+                                        StructField("velocidad_grandes_parques", ArrayType(DoubleType()))])
+
+
+
+            schema = StructType([StructField("key", StringType(), True),
+                    StructField("turbine_info", turbine_info, True),
+                    StructField("estructura_info", estructura_info, True),
+                    StructField("densidad", ArrayType(DoubleType()))])
+                    #StructField("estructura_info", estructura_info, True)])
+
+            df_data = self.sesion_spark.createDataFrame(data, schema)  
+            
+                                 
+            self.logger_info.send_logg(params.ParametrosTransversales.NombrePlanta + " Correccion parques ", start)
             print("Estela")
             cae_instancia.consumir_api_estado(MensajesEolica.Estado.ESTELA.value, True)
             start = time.time()
-            densidad = pd.DataFrame(
-                {key: value.df["DenBuje"] for key, value in aerogeneradores.items()}
-            )
-            curvas_xarray = self.__estructura_xarray_curvas(aerogeneradores)
-            n_estampas = len(serie_tiempo)
 
-            wrapper_estela = functools.partial(
-                workers.wrapper_efecto_estela_vectorizado,
+            curvas_info = {'cur_vel': curvas_xarray['cur_vel'].values,
+                                    'cur_coef': curvas_xarray['cur_coef'].values}
+
+            velocidades_estela = workers.wrapper_efecto_estela_vectorizado(
                 offshore,
                 cre,
-                caracteristicas_df,
-                densidad,
-                estructura_xarray,
+                caracteristicas_df,         
                 n_turbinas,
-                curvas_xarray,
-            )
-
-            velocidades_estela = POOL.map(
-                wrapper_estela, ((i, dict_ordenamiento[list(dict_ordenamiento.keys())[i]]) for i in range(0, n_estampas)), chunksize=CHUNKS
+                df_data,
+                curvas_info
             )
 
             estructura_xarray["velocidad_estela"] = (
@@ -264,27 +337,26 @@ class ServicioEolicas:
                     DESCRIPCION: "Velocidad del viento perturbada por efecto estela en [m/s]."
                 },
             )
-
-            POOL.close()
-
-            end = time.time()
-            timer(start, end)
-
+            
+            self.logger_info.send_logg(params.ParametrosTransversales.NombrePlanta + " Estela ", start)
+            xarray_keys = list(estructura_xarray.tiempo.values)
+            data_xarray = [[str(val), convert_xarray(estructura_xarray, val), list(densidad.loc[val])]for i, val in enumerate(xarray_keys)]
+            potencia_data_df = self.sesion_spark.createDataFrame(data_xarray, potencia_schema)
             print("Potencia")
             start = time.time()
 
             cae_instancia.consumir_api_estado(
                 MensajesEolica.Estado.POTENCIA.value, True
             )
+
+            
             estructura_xarray = self.__calculo_potencia_vectorizado(
+                potencia_data_df,
                 caracteristicas_df,
-                estructura_xarray,
-                densidad,
+                estructura_xarray,                
                 curvas_xarray,
-                n_turbinas,
-                n_estampas,
                 params_trans,
-                promedio_ohm,
+                promedio_ohm
             )
             cae_instancia.consumir_api_estado(
                 MensajesEolica.Estado.POTENCIA.value, True
@@ -299,14 +371,12 @@ class ServicioEolicas:
             energia_planta = self.__crear_df_energia_planta(
                 estructura_xarray, serie_tiempo
             )
-
-            end = time.time()
-            timer(start, end)
+            energia_planta = energia_planta.clip(upper=params_trans.Ppi/1000)
+            self.logger_info.send_logg(params.ParametrosTransversales.NombrePlanta + " Potencia ", start)           
 
             nombre_archivo_resultado = (
-                os.path.splitext(self.cliente_azure.blob)[0] + "_resultado.xlsx"
+                os.path.splitext(params.ArchivoSeries.Nombre)[0] + "_resultado.xlsx"
             )
-
             energia_al_mes = self.manipulador_df.filtrar_por_mes(energia_planta)
             energia_diaria = self.manipulador_df.filtrar_por_dia(energia_al_mes)
             resultado_enficc = self.calcular_enficc(params_trans, energia_diaria)
@@ -317,7 +387,6 @@ class ServicioEolicas:
             resultado_enficc.valor = round(resultado_enficc.valor)
 
             self.generar_archivo.generar_archivo_excel(
-                self.cliente_azure,
                 energia_planta=energia_planta,
                 energia_mes=energia_al_mes,
                 energia_diaria=energia_diaria,
@@ -328,22 +397,20 @@ class ServicioEolicas:
             resultado = Respuesta(
                 nombre_archivo_resultado, [resultado_enficc], resultado_eda
             )
-
+            
+            print("TIEMPO TOTAL: ", timer(start_global, time.time()))
+            self.logger_info.send_logg(params.ParametrosTransversales.NombrePlanta + " TIEMPO TOTAL:  ", start)           
             return resultado
-        except BaseExcepcion as e:
-            if POOL:
-                POOL.close()
-                POOL.join()
-                POOL.terminate()
+        except BaseExcepcion as e:            
+            print("ERROR BaseExcepcion")
+            print(e)
             return ManipuladorExcepciones(e.error, e.tarea, e.mensaje)
         except Exception as e:
-            if POOL:
-                POOL.close()
-                POOL.join()
-                POOL.terminate()
+            print("ERROR Exceptions")
+            print(e)
             return ManipuladorExcepciones(e, "Ejecutando Calculos.", "Error no controlado.")
 
-    def generar_dataframe(self, nombre_blob: str) -> pl.DataFrame:
+    def generar_dataframe(self, nombre_blob: str) -> DataFrame:
         """
         Genera un dataframe usando el nombre del blob.
         Args:
@@ -351,10 +418,12 @@ class ServicioEolicas:
         Retorna:
             pl.DataFrame: El dataframe Polars generado.
         """
-        self.cliente_azure = ClienteAzure(blob=nombre_blob)
-
-        df = self.cliente_azure.archivo_leer()
-        self.cliente_azure.archivo_blob_borrar()
+        df = pd.read_parquet(os.environ['VOLUME'] + nombre_blob)
+        spark = SparkSession.builder.getOrCreate()
+        if 'PYTEST_CURRENT_TEST' not in os.environ:
+            from pyspark.dbutils import DBUtils
+            dbutils = DBUtils(spark)
+            dbutils.fs.rm(os.environ['VOLUME'] + nombre_blob)
 
         return df
 
@@ -419,6 +488,7 @@ class ServicioEolicas:
             torre_id = torre.IdentificadorTorre
             df = self.generar_dataframe(torre.ArchivoSeriesRelacionado)
             df = self.manipulador_df.ajustar_df_eolica(df)
+
             torres_dict[torre_id] = Torre(
                 torre_id,
                 torre.Latitud,
@@ -431,6 +501,12 @@ class ServicioEolicas:
             )
 
         return torres_dict
+    def process_pandas_df(self, aero, df):
+        aero.df = df.copy()
+        aero.df["VelocidadEstela"] = aero.df["VelocidadViento"]
+
+    def process_spark_df(self, aero, df):
+        aero.df = df.withColumn("VelocidadEstela", col("VelocidadViento"))    
 
     def __asignar_df_aerogeneradores(
         self, aerogeneradores: Dict, torres: Dict | None = None, df: pd.DataFrame | None = None
@@ -455,7 +531,7 @@ class ServicioEolicas:
             for aero in aerogeneradores.values():
                 aero.df = df.copy()
                 aero.df["VelocidadEstela"] = aero.df["VelocidadViento"]
-        return aerogeneradores
+        return aerogeneradores       
 
     def __obtener_z_cre_values(self, offshore: bool) -> tuple:
         """
@@ -470,14 +546,9 @@ class ServicioEolicas:
             - cre: Constante que depende de offshore
         """
         if offshore:
-            z_o2 = 0.03
-            z_o1 = 0.0002
-            cre = 0.04
+            return 0.0002, 0.03, 0.04
         else:
-            z_o2 = 0.05
-            z_o1 = 0.055
-            cre = 0.075
-        return z_o1, z_o2, cre
+            return 0.055, 0.05, 0.075
 
     def calcular_enficc(
         self, params_trans: ParametrosTransversales, energia_diaria_df
@@ -512,8 +583,6 @@ class ServicioEolicas:
 
     def __crear_lista_argumentos_correcciones(
         self,
-        aerogeneradores: Dict,
-        modelos: Dict,
         h_buje_promedio: np.float64,
         offshore: bool,
         z_o1: float,
@@ -538,11 +607,9 @@ class ServicioEolicas:
         """
         args_list = [
             (
-                fecha,
+                fecha.to_pydatetime().isoformat(),
                 ordenamiento,
-                aerogeneradores,
-                modelos,
-                h_buje_promedio,
+                float(h_buje_promedio),
                 offshore,
                 z_o1,
                 z_o2,
@@ -574,7 +641,7 @@ class ServicioEolicas:
             CalculoExcepcion
     )
     def __asignar_valores_aerogeneradores(
-        self, resultados: Tuple, aerogeneradores: Dict, columna: str
+        self, resultados, aerogeneradores: Dict, columna: str
     ) -> None:
         """
         Asigna los resultados obtenidos por los workers a los aerogeneradores correspondientes.
@@ -586,24 +653,10 @@ class ServicioEolicas:
         Retorna:
             - aerogeneradores (Dict): Diccionario de los aerogeneradores con sus dataframes actualizados.
         """
-        fecha, velocidades = resultados[0], resultados[1]
-        if len(velocidades) > 0:
-            for aero_id, v in velocidades:
+        for value in resultados:
+            fecha, aero_id, v = value['fech'], value['aero_id'], value['vel_corregida']
+            if v is not None:
                 aerogeneradores[aero_id].df.at[fecha, columna] = v
-
-    def __chunksize(self, n_workers, len_iterable):
-        """
-        Calcula el parámetro 'chunksize' para los métodos multiprocessing.Pool().
-        Se asemeja al código fuente dentro de 'multiprocessing.pool.Pool._map_async'.
-
-        ref: https://stackoverflow.com/questions/53751050/multiprocessing-understanding-logic-behind-chunksize
-        """
-        chunksize, extra = divmod(len_iterable, n_workers)
-
-        if extra:
-            chunksize += 1
-
-        return chunksize
 
     def __caracteristicas_tij(self, aerogeneradores: Dict, modelos: Dict):
         """
@@ -616,26 +669,28 @@ class ServicioEolicas:
             - caracteristicas_df (pd.DataFrame): Dataframe de 8 columnas por x numero de aerogeneradores.
         """
         index = [aero.id_aero for aero in aerogeneradores.values()]
-        num_aeros = len(index)
-        elevacion = [modelos[aero.modelo].altura_buje for aero in aerogeneradores.values()]
-        diametro = [modelos[aero.modelo].diametro_rotor for aero in aerogeneradores.values()]
-        densidad = [modelos[aero.modelo].den_nominal for aero in aerogeneradores.values()]
-        distancia_pcc = [aero.dist_pcc for aero in aerogeneradores.values()]
-        t_minima = [modelos[aero.modelo].t_min for aero in aerogeneradores.values()]
-        t_maxima =[modelos[aero.modelo].t_max for aero in aerogeneradores.values()]
-        p_nominal = [modelos[aero.modelo].p_nominal for aero in aerogeneradores.values()]
-        radio = np.array(diametro) / 2
-        area_rotor = np.pi * (radio**2)
-
+        
+        elevacion = np.array([modelos[aero.modelo].altura_buje for aero in aerogeneradores.values()])
+        diametro = np.array([modelos[aero.modelo].diametro_rotor for aero in aerogeneradores.values()])
+        densidad = np.array([modelos[aero.modelo].den_nominal for aero in aerogeneradores.values()])
+        distancia_pcc = np.array([aero.dist_pcc for aero in aerogeneradores.values()])
+        t_minima = np.array([modelos[aero.modelo].t_min for aero in aerogeneradores.values()])
+        t_maxima = np.array([modelos[aero.modelo].t_max for aero in aerogeneradores.values()])
+        p_nominal = np.array([modelos[aero.modelo].p_nominal for aero in aerogeneradores.values()])
+        
+        radio = diametro / 2
+        area_rotor = np.pi * (radio ** 2)
+        
+        # Creating the DataFrame directly using the arrays
         caracteristicas_df = pd.DataFrame({
-            "altura_buje": np.full(num_aeros, elevacion),
-            "radio": np.full(num_aeros, radio),
-            "densidad": np.full(num_aeros, densidad),
-            "area_rotor": np.full(num_aeros, area_rotor),
-            "dist_pcc": np.full(num_aeros, distancia_pcc),
-            "t_min": np.full(num_aeros, t_minima),
-            "t_max": np.full(num_aeros, t_maxima),
-            "p_nominal": np.full(num_aeros, p_nominal),
+            "altura_buje": elevacion,
+            "radio": radio,
+            "densidad": densidad,
+            "area_rotor": area_rotor,
+            "dist_pcc": distancia_pcc,
+            "t_min": t_minima,
+            "t_max": t_maxima,
+            "p_nominal": p_nominal,
         }, index=index)
 
         return caracteristicas_df
@@ -701,12 +756,10 @@ class ServicioEolicas:
     )
     def __calculo_potencia_vectorizado(
         self,
+        potencia_data_df,
         caracteristicas_df: pd.DataFrame,
         estructura_xarray: xr.Dataset,
-        densidad: pd.DataFrame,
         curvas_xarray: xr.Dataset,
-        n_turbinas: int,
-        n_estampas: int,
         params_trans: ParametrosTransversales,
         promedio_ohm: float
     ) -> xr.Dataset:
@@ -725,9 +778,15 @@ class ServicioEolicas:
         Retorna:
             - ds (xr.Dataset): Estructura xarray modificada con potencia.
         """
-        ds = potencia_vectorizado(
-            caracteristicas_df, estructura_xarray, densidad, curvas_xarray, n_turbinas, n_estampas, params_trans, promedio_ohm
+        ds = potencia_vectorizado_udf(
+            potencia_data_df,
+            caracteristicas_df,
+            estructura_xarray,
+            curvas_xarray,
+            params_trans,
+            promedio_ohm
         )
+
         return ds
 
     def __crear_df_energia_planta(

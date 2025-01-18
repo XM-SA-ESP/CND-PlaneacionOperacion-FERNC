@@ -1,62 +1,94 @@
-from utils.eolica.funciones_correccion_velocidad_parque_eolico import (
+import pandas as pd
+from pyspark.sql.functions import pandas_udf, PandasUDFType
+from XM_FERNC_API.utils.eolica.funciones_correccion_velocidad_parque_eolico import (
     CorreccionVelocidadParque,
+    correccion_velocidad_parque_eolico_solo
 )
-from utils.eolica.caracterizacion_estela import Estela
+from XM_FERNC_API.utils.eolica.caracterizacion_estela import efecto_estela_vectorizado_refactor
+import pandas as pd
+from pyspark.sql.functions import pandas_udf, PandasUDFType
+from pyspark.sql.types import StructField, StringType, IntegerType, ArrayType, StructType, MapType, DoubleType
+import numpy as np
+from pyspark.sql import SparkSession
 
 
-def correcciones_worker(args: tuple) -> tuple:
-    """
-    Worker para el multiproceso de la correccion de las velocidades.
-    Args:
-        args (tuple): Una tupla de argumentos que contiene:
-            - fecha (pd.DatetimeIndex): Fecha de referencia.
-            - ordenamiento (List): Lista de ordenamiento para fecha.
-            - aerogeneradores_dict (Dict): El diccionario de aerogeneradores.
-            - modelos (Dict): El diccionario de modelos.
-            - h_buje_promedio (float): La altura promedio del buje.
-            - offshore (boolean): Boolean que indica si el parametro offshore es True o False.
-            - z_o1 (float): Rugosidad del terreno.
-            - z_o2 (float): Rugosidad aumentada por el parque.
-    Retorna:
-        tuple: Una tupla que contiene:
-            - fecha (pd.DatetimeIndex): La fecha.
-            - velocidades (list): La lista de tuplas con id aero(int) y velocidades(float).
-    """
-    correccion_parques = CorreccionVelocidadParque()
-    (
-        fecha,
-        ordenamiento,
-        aerogeneradores_dict,
-        modelos,
-        h_buje_promedio,
-        offshore,
-        z_o1,
-        z_o2,
-    ) = args
-    velocidades = []
-    for v, aero_id in correccion_parques.correccion_velocidad_parque_eolico(
-        fecha,
-        ordenamiento,
-        aerogeneradores_dict,
-        modelos,
-        h_buje_promedio,
-        offshore,
-        z_o1,
-        z_o2,
-    ):
-        if v is not None:
-            velocidades.append((aero_id, v))
-    return fecha, velocidades
 
-def wrapper_efecto_estela_vectorizado(offshore, cre, caracteristicas_tij, densidad, dataset, n_turbinas, curvas_xarray, n_estampa_df):
+# Define the schema
 
-    estela = Estela(offshore=offshore,
-                    cre=cre,
-                    caracteristicas_tij=caracteristicas_tij,
-                    densidad=densidad,
-                    dataset=dataset,
-                    n_turbinas=n_turbinas,
-                    curvas_xarray=curvas_xarray,
-                    n_estampa_df=n_estampa_df)
+schema = ArrayType(StructType([
+        StructField("fech", StringType(), True),
+        StructField("aero_id", IntegerType(), True),
+        StructField("vel_corregida", DoubleType(), True)
+]))
 
-    return estela.efecto_estela_vectorizado()
+
+
+def new_correcction(args_list_df, aerogeneradores_broadcast, modelos_broadcast):    
+    @pandas_udf(schema)
+    def correcciones_worker_udf(fecha: pd.Series, ordenamiento: pd.Series, h_buje_promedio: pd.Series, z_o1: pd.Series, z_o2: pd.Series) -> pd.Series:
+        
+        results = []
+        
+        for i in range(fecha.shape[0]):
+            vel_aero_list_3 = []
+            fech = fecha[i]
+            orden = ordenamiento[i]
+            h_buje = h_buje_promedio[i] 
+            z1 = float(str(z_o1[i]))
+            z2 = float(str(z_o2[i]))              
+            
+
+            vel_aero_list = correccion_velocidad_parque_eolico_solo(
+                fech,
+                orden,
+                aerogeneradores_broadcast.value,
+                modelos_broadcast.value,
+                h_buje,
+                z1,
+                z2,
+            )
+            if vel_aero_list is not None:                     
+                for vel, aero in vel_aero_list:
+                    vel_aero_list_3.append((fech,aero, vel))
+            else:
+                vel_aero_list_3.append((fech,None, None))            
+            results.append(vel_aero_list_3)
+
+
+        return pd.Series(results)
+
+    temp = args_list_df.withColumn("result", correcciones_worker_udf("fecha", "ordenamiento", "h_buje_promedio", "offshore", "z_o1", "z_o2")).select("result")    
+    result_array= temp.collect()    
+    return result_array
+
+
+def wrapper_efecto_estela_vectorizado(offshore, cre, caracteristicas_tij, n_turbinas, df_data, curvas_info):
+
+    @pandas_udf(ArrayType(DoubleType()))
+    def vectorized_udf(keys: pd.Series, 
+                    turbine_info:pd.Series,
+                    estructura_info: pd.Series,
+                    densidades:pd.Series) -> pd.Series:
+        result = []
+        for i in range(keys.shape[0]):
+            densidad = densidades.iloc[i]
+            estela_result = efecto_estela_vectorizado_refactor(
+                                                            offshore, 
+                                                            cre,
+                                                            densidad,  
+                                                            turbine_info.iloc[i],
+                                                            estructura_info.iloc[i],
+                                                            n_turbinas,
+                                                            caracteristicas_tij,
+                                                            curvas_info
+                                                        )
+
+            result.append(estela_result)
+        return pd.Series(result)
+    spark = SparkSession.builder.getOrCreate() ##
+    spark.conf.set("spark.sql.execution.arrow.pyspark.enabled", "true")##
+    result = df_data.withColumn("result", vectorized_udf("key", "turbine_info", "estructura_info",  "densidad")).select("result").collect()
+    velocidades_estela = [np.array(row.result) for row in result]
+
+
+    return velocidades_estela

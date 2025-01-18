@@ -6,7 +6,7 @@ from utils.eolica.dataclasses_eolica import Aerogenerador
 
 class TestCalculosEstela(unittest.TestCase):
     def setUp(self):
-        self.mock_aero1 = Aerogenerador(
+        self.mock_aero1 = dict(
             id_aero=1,
             id_torre="torre_1",
             modelo="enercon",
@@ -14,7 +14,7 @@ class TestCalculosEstela(unittest.TestCase):
             longitud=-71.226417,
             elevacion=1,
         )
-        self.mock_aero2 = Aerogenerador(
+        self.mock_aero2 = dict(
             id_aero=2,
             id_torre="torre_1",
             modelo="enercon",

@@ -21,8 +21,8 @@ class TestCalculoSolar(unittest.TestCase):
         self.params = JsonModelSolar(**json_data)
         self.servicio_solar = ServicioSolar()
 
-    @mock.patch("dominio.servicio.solar.servicio_solares.ServicioSolar.generar_dataframe")
-    @mock.patch("dominio.servicio.solar.servicio_solares.ServicioSolar.ejecutar_calculos")
+    @mock.patch("XM_FERNC_API.dominio.servicio.solar.servicio_solares.ServicioSolar.generar_dataframe")
+    @mock.patch("XM_FERNC_API.dominio.servicio.solar.servicio_solares.ServicioSolar.ejecutar_calculos")
     def test_realizar_calculo_solares_parametros(self, mock_ejecutar_calculos, mock_generar_dataframe):
         """
         Prueba que la funcion fue llamada con exito
@@ -34,10 +34,10 @@ class TestCalculoSolar(unittest.TestCase):
 
         mock_ejecutar_calculos.assert_called_once()
 
-    @mock.patch("dominio.servicio.solar.servicio_solares.ServicioSolar.generar_dataframe")
-    @mock.patch("dominio.servicio.solar.servicio_solares.ServicioSolar.ejecutar_calculos")
-    @mock.patch("infraestructura.calculos.solar.calculo_solar.enviar_excepcion_sb_transversal")
-    @mock.patch("utils.consumidor.ConsumirApiEstado.enviar_resultados")
+    @mock.patch("XM_FERNC_API.dominio.servicio.solar.servicio_solares.ServicioSolar.generar_dataframe")
+    @mock.patch("XM_FERNC_API.dominio.servicio.solar.servicio_solares.ServicioSolar.ejecutar_calculos")
+    @mock.patch("XM_FERNC_API.infraestructura.calculos.solar.calculo_solar.enviar_excepcion_sb_transversal")
+    @mock.patch("XM_FERNC_API.utils.consumidor.ConsumirApiEstado.enviar_resultados")
     def test_realizar_calculo_eolicas_retorna_excepcion(
         self,
         mock_enviar_resultados,
@@ -56,11 +56,11 @@ class TestCalculoSolar(unittest.TestCase):
         mock_enviar_resultados.return_value = None
         resultado = realizar_calculo_solares(self.params)
 
-        assert resultado == None
+        assert isinstance(resultado, ManipuladorExcepciones) == True
 
-    @mock.patch("dominio.servicio.azure.cliente_az_servicebus.ClienteServiceBusTransversal._ClienteServiceBusTransversal__obtener_sb_nombre_espacio")
-    @mock.patch("dominio.servicio.azure.cliente_az_servicebus.ClienteServiceBusTransversal._ClienteServiceBusTransversal__obtener_sb_connection_string")
-    @mock.patch("dominio.servicio.azure.cliente_az_servicebus.ClienteServiceBusTransversal.enviar_mensaje_excepcion")
+    @mock.patch("XM_FERNC_API.dominio.servicio.azure.cliente_az_servicebus.ClienteServiceBusTransversal._ClienteServiceBusTransversal__obtener_sb_nombre_espacio")
+    @mock.patch("XM_FERNC_API.dominio.servicio.azure.cliente_az_servicebus.ClienteServiceBusTransversal._ClienteServiceBusTransversal__obtener_sb_connection_string")
+    @mock.patch("XM_FERNC_API.dominio.servicio.azure.cliente_az_servicebus.ClienteServiceBusTransversal.enviar_mensaje_excepcion")
     def test_enviar_excepcion_sb_transversal(
         self, mock_enviar_excepcion, mock_obtener_sb_connection_string, mock_obtener_sb_nombre
     ):

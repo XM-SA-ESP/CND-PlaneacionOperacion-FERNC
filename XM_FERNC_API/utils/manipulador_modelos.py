@@ -2,12 +2,12 @@ import numpy as np
 
 from typing import Dict, Tuple
 
-from infraestructura.models.eolica.parametros import (
+from XM_FERNC_API.infraestructura.models.eolica.parametros import (
     JsonModelEolica,
     EspecificacionesEspacialesAerogeneradores,
 )
-from utils.decoradores import capturar_excepciones
-from utils.mensaje_constantes import MensajesEolica
+from XM_FERNC_API.utils.decoradores import capturar_excepciones
+from XM_FERNC_API.utils.mensaje_constantes import MensajesEolica
 
 
 class ManipuladorModelos:

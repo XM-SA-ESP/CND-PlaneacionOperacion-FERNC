@@ -13,18 +13,21 @@ class ManejadorServiceBus:
         self.environment = os.environ.get("ENVIRONMENT")
 
     def consumir_service_bus(self):
-        with (ServiceBusClient.from_connection_string(
-                self.__obtener_sb_connection_string()
-            )
-            if self.environment == "dev"
-            else ServiceBusClient(
-                self.__obtener_sb_nombre_espacio(DefaultAzureCredential()),
-                DefaultAzureCredential(),
-            )
-        ) as cliente:
-            while True:
-                print("Escuchando...")
-                self.__consumir_cola(cliente)
+        try: 
+            with (ServiceBusClient.from_connection_string(
+                    self.__obtener_sb_connection_string()
+                )
+                if self.environment == "dev"
+                else ServiceBusClient(
+                    self.__obtener_sb_nombre_espacio(DefaultAzureCredential()),
+                    DefaultAzureCredential(),
+                )
+            ) as cliente:
+                while True:
+                    print("Escuchando...")
+                    self.__consumir_cola(cliente)
+        except Exception as e:
+            print(e)
 
     def __obtener_sb_connection_string(self) -> str:
         return os.environ.get("CONNECTION_STRING_SB_FERNC")

@@ -1,42 +1,55 @@
 import os
-import xm_solarlib
 import polars as pl
 import pandas as pd
+import time
 
 from typing import List, Dict
-
-from xm_solarlib.pvsystem import PVSystem
 from pandas.core.frame import DataFrame as Pandas_Dataframe
-
-from dominio.servicio.azure_blob.cliente_azure import ClienteAzure
-from infraestructura.models.respuesta import Respuesta, Resultado
-from infraestructura.models.solar.parametros import (
+from xm_solarlib.pvsystem import PVSystem
+from XM_FERNC_API.dominio.servicio.azure_blob.cliente_azure import ClienteAzure
+from XM_FERNC_API.infraestructura.models.respuesta import Respuesta, Resultado
+from XM_FERNC_API.infraestructura.models.solar.parametros import (
     JsonModelSolar,
     ParametrosTransversales,
     ParametrosInversor,
     ParametrosModulo,
 )
 
-from utils.consumidor import ConsumirApiEstado
-from utils.mensaje_constantes import MensajesSolar
-from utils.manipulador_dataframe import ManipuladorDataframe
-from utils.manipulador_excepciones import BaseExcepcion, CalculoExcepcion, ManipuladorExcepciones
-from utils.solar.funciones_dni_dhi import CalculoDniDhi
-from utils.solar.funciones_pvsystem import (
+from XM_FERNC_API.utils.consumidor import ConsumirApiEstado
+from XM_FERNC_API.utils.mensaje_constantes import MensajesSolar
+from XM_FERNC_API.utils.manipulador_dataframe import ManipuladorDataframe
+from XM_FERNC_API.utils.manipulador_excepciones import BaseExcepcion, CalculoExcepcion, ManipuladorExcepciones
+from XM_FERNC_API.utils.solar.funciones_dni_dhi import CalculoDniDhi
+from XM_FERNC_API.utils.solar.funciones_pvsystem import (
     crear_array,
     crear_montura_con_seguidores,
     crear_montura_no_seguidores,
 )
-from utils.solar.funciones_poa import poa_bifacial, poa_no_bifacial
-from utils.solar.funciones_cec import (
+from XM_FERNC_API.utils.solar.funciones_poa import poa_bifacial, poa_no_bifacial
+from XM_FERNC_API.utils.solar.funciones_cec import (
     obtener_parametros_fit_cec_sam,
     obtener_parametros_circuito_eq,
 )
-from utils.solar.calculos_polars import calculo_temp_panel
-from utils.solar.funciones_solucion_cec import obtener_solucion_circuito_eq
-from utils.solar.funciones_calculo_dc_ac import CalculoDCAC
-from utils.generar_archivo_excel import GenerarArchivoExcel
-from utils.decoradores import capturar_excepciones
+from io import BytesIO
+from azure.storage.blob import BlobServiceClient
+from XM_FERNC_API.utils.solar.calculos_polars import calculo_temp_panel
+from XM_FERNC_API.utils.solar.funciones_solucion_cec import obtener_solucion_circuito_eq
+from XM_FERNC_API.utils.solar.funciones_calculo_dc_ac import CalculoDCAC
+from XM_FERNC_API.utils.generar_archivo_excel import GenerarArchivoExcel
+from XM_FERNC_API.utils.decoradores import capturar_excepciones
+
+from logging import INFO, getLogger, StreamHandler, Formatter
+from azure.monitor.opentelemetry import configure_azure_monitor
+from pyspark.sql import SparkSession
+
+
+
+import time
+def timer(start,end):
+   hours, rem = divmod(end-start, 3600)
+   minutes, seconds = divmod(rem, 60)
+   return "{:0>2}:{:0>2}:{:05.2f}".format(int(hours),int(minutes),seconds)
+from XM_FERNC_API.utils.databricks_logger import DbLogger, timer
 
 
 class ServicioSolar:
@@ -45,10 +58,15 @@ class ServicioSolar:
         self.calculo_dni_dhi = CalculoDniDhi()
         self.calculo_dc_ac = CalculoDCAC()
         self.cliente_azure = None
-        self.generar_archivo = GenerarArchivoExcel(self.manipulador_df)
+        self.generar_archivo = GenerarArchivoExcel(self.manipulador_df, 0)
 
         self.inversores_pvsystem = None
         self.inversores_resultados = None
+
+        self.logger_info = DbLogger('info')
+
+        
+
 
     def generar_dataframe(self, nombre_blob: str) -> pl.DataFrame:
         """
@@ -58,13 +76,16 @@ class ServicioSolar:
 
         Retorna:
             df: Dataframe generado a partir del archivo de Azure.
-        """
-        self.cliente_azure = ClienteAzure(blob=nombre_blob)
-        df = self.cliente_azure.archivo_leer()
-        self.cliente_azure.archivo_blob_borrar()
+        """        
+        df = pd.read_parquet(os.environ['VOLUME'] + nombre_blob)
+        spark = SparkSession.builder.getOrCreate()
+        if 'PYTEST_CURRENT_TEST' not in os.environ:
+            from pyspark.dbutils import DBUtils
+            dbutils = DBUtils(spark)
+            dbutils.fs.rm(os.environ['VOLUME'] + nombre_blob)
         return df
 
-    def ejecutar_calculos(self, df: pl.DataFrame, params: JsonModelSolar) -> Respuesta:
+    def ejecutar_calculos(self, df: pl.DataFrame, params: JsonModelSolar):
         """
         Método principal que ejecuta los cálculos y arroja los resultados del proceso completo para plantas solares.
         A partir de los archivos de series y demás valores del objeto se obtiene los resultados esperados.
@@ -77,61 +98,85 @@ class ServicioSolar:
             resultado: Objeto de tipo Respuesta que contiene el resultado final de la EDA, la lista de valores de la ENFICC por cada periodo de la serie y el nombre del archivo
             subido al blob storage con todos los resultados por cada fila de las series cargadas según sea el caso.
         """
-        df = df.to_pandas()
+        
+        self.logger_info.initialize_logger()
 
         df["Ghi"] = df["Ghi"].str.replace(",", ".")
         df["Ta"] = df["Ta"].str.replace(",", ".")
         params_trans = params.ParametrosTransversales
-        params_trans.Ihf = params_trans.Ihf / 100  # Dividir por 100
+        params_trans.Ihf = params_trans.Ihf / 100
         ID_CONEXION = params.IdConexionWs
         cae_instancia = ConsumirApiEstado(
             proceso="EstadoCalculo", conexion_id=ID_CONEXION, pasos_totales=5
         )
 
         try:
+            start_global = time.time()                        
             print(f"Nombre planta:{params.ParametrosTransversales.NombrePlanta}")
             cae_instancia.consumir_api_estado(MensajesSolar.Estado.DNI_DHI.value, True)
+            
+            print("DNI/DHI")
+            
+            start = time.time()                                                      
             series_dni_dhi = self.ejecutar_calculo_dni_dhi(df, params)
-
             df.index = series_dni_dhi.index
-
             series_dni_dhi = self.manipulador_df.filtrar_dataframe(series_dni_dhi)
-
-            cae_instancia.consumir_api_estado(MensajesSolar.Estado.POA.value, True)
+            self.logger_info.send_logg(params.ParametrosTransversales.NombrePlanta + " DNI/DHI ", start)
+            
+            print("Calculo POA")
+            start = time.time()                             
+            cae_instancia.consumir_api_estado(MensajesSolar.Estado.POA.value, True)            
             self.inversores_pvsystem, self.inversores_resultados = (
                 self.ejecutar_calculo_poa(series_dni_dhi, params)
-            )
+            )            
+            self.manipulador_df.restaurar_dataframe(df, self.inversores_resultados)            
+            self.logger_info.send_logg(params.ParametrosTransversales.NombrePlanta + " Calculo POA ", start)
 
-            self.manipulador_df.restaurar_dataframe(df, self.inversores_resultados)
-
-            self.ejecutar_calculo_temperatura_panel()
-
+            print("Calcular Temperatura Panel")
+            start = time.time()                               
+            self.ejecutar_calculo_temperatura_panel()                                                         
+            self.logger_info.send_logg(params.ParametrosTransversales.NombrePlanta + " Calcular Temperatura Panel ", start)
+            
+            print("Calcular CEC")
+            start = time.time()                        
             cae_instancia.consumir_api_estado(MensajesSolar.Estado.CIRCUITO_EQUIVALENTE.value, True)
             self.ejecutar_calculo_parametros_cec()
-            self.ejecutar_calculo_solucion_cec()
-
+            self.ejecutar_calculo_solucion_cec()            
+            self.logger_info.send_logg(params.ParametrosTransversales.NombrePlanta + " Calcular CEC ", start)    
+            
+            print("Calculo Energias")
+            start = time.time()                        
             cae_instancia.consumir_api_estado(MensajesSolar.Estado.ENERGIA_DC_AC.value, True)            
-            inv_dict = self.calculo_energias(params_trans)
-
+            inv_dict = self.calculo_energias(params_trans)                                 
+            self.logger_info.send_logg("Calculo Energias ", start)                  
+            
+            print("Ajuste de Energias")
+            start = time.time()
             cae_instancia.consumir_api_estado(MensajesSolar.Estado.AJUSTANDO_ENERGIA.value, True)
             energia_planta = self.ajustar_energias(inv_dict, params_trans)
-
             energia_al_mes = self.manipulador_df.filtrar_por_mes(energia_planta)
-            energia_diaria = self.manipulador_df.filtrar_por_dia(energia_al_mes)
+            energia_diaria = self.manipulador_df.filtrar_por_dia(energia_al_mes)                             
+            self.logger_info.send_logg(params.ParametrosTransversales.NombrePlanta + " Ajuste de Energias ", start)                      
 
-            resultado_enficc = self.calcular_enficc(params_trans, energia_diaria)
+            
+            print("Calculo ENFICC")
+            start = time.time()                               
+            resultado_enficc = self.calcular_enficc(params_trans, energia_diaria)                      
+            self.logger_info.send_logg(params.ParametrosTransversales.NombrePlanta + " Calculo ENFICC ", start)               
+            
+            print("Calculo EDA")
+            start = time.time()                        
             resultado_eda = self.manipulador_df.calcular_eda(
                 params_trans, energia_diaria, resultado_enficc
             )
-
             resultado_enficc.valor = round(resultado_enficc.valor)
-
             nombre_archivo_resultado = (
-                os.path.splitext(self.cliente_azure.blob)[0] + "_resultado.xlsx"
-            )
-
+                os.path.splitext(params.ArchivoSeries.Nombre)[0] + "_resultado.xlsx"
+            )                                           
+            self.logger_info.send_logg(params.ParametrosTransversales.NombrePlanta + " Calculo EDA", start)
+            
+            print("Guardando Archivo")
             self.generar_archivo.generar_archivo_excel(
-                self.cliente_azure,
                 energia_planta=energia_planta,
                 energia_mes=energia_al_mes,
                 energia_diaria=energia_diaria,
@@ -139,11 +184,10 @@ class ServicioSolar:
                 eda=resultado_eda,
                 nombre_archivo=nombre_archivo_resultado,
             )
-
             resultado = Respuesta(
                 nombre_archivo_resultado, [resultado_enficc], resultado_eda
-            )
-
+            )                                          
+            self.logger_info.send_logg(params.ParametrosTransversales.NombrePlanta + " TIEMPO TOTAL: ", start_global)
             return resultado
 
         except BaseExcepcion as e:
@@ -173,8 +217,7 @@ class ServicioSolar:
                 if f"Inversor {i + 1} Array" in k2:
                     lista_array.append(j["solucion_cec"])
 
-            pvsys = self.inversores_pvsystem[k1]
-
+            pvsys = self.inversores_pvsystem[k1]            
             resultado = self.ejecutar_calculo_dc_ac(
                 pvsys, lista_array, params_trans, params_inversor, params_modulo
             )
@@ -270,14 +313,10 @@ class ServicioSolar:
                 else:
                     montura = crear_montura_no_seguidores(params_array)
 
-                array = crear_array(
-                    montura, params_trans, params_array, nombre=f"Array {j + 1}"
-                )
+                array = crear_array(montura, params_trans, params_array, nombre=f"Array {j + 1}")
                 arrays.append(array)
 
-                poa = self.calculo_poa(
-                    df_dni_dhi, montura, params_trans, params_inv, params_array
-                )
+                poa = self.calculo_poa(df_dni_dhi, montura, params_trans, params_inv, params_array)
 
                 inversores_resultados[f"Inversor {i + 1} Array {j + 1} POA"] = {
                     "POA": poa,
@@ -285,9 +324,7 @@ class ServicioSolar:
                     "params_array": params_array,
                 }
 
-            inv_sys = xm_solarlib.pvsystem.PVSystem(
-                arrays=arrays, name=f"PVSys Inv {i + 1}"
-            )
+            inv_sys = PVSystem(arrays=arrays, name=f"PVSys Inv {i + 1}")
             inversores_pvsystem[f"Inversor {i + 1} PvSystem"] = inv_sys
 
         return inversores_pvsystem, inversores_resultados
@@ -323,6 +360,7 @@ class ServicioSolar:
             data["POA"]["temp_panel"] = local_df["temp_panel"]
             del local_df
 
+
     @capturar_excepciones(
         MensajesSolar.Estado.CIRCUITO_EQUIVALENTE.value,
         MensajesSolar.Error.CIRCUITO_EQUIVALENTE_PARAMETROS.value,
@@ -344,26 +382,22 @@ class ServicioSolar:
 
         Retorna:
             None
-        """
+        """        
+
         for data in self.inversores_resultados.values():
             params_modulo = data["params_inv"].ParametrosModulo
-
             params_cec_sam = obtener_parametros_fit_cec_sam(params_modulo)
+            
             parametros_circuito_eq = obtener_parametros_circuito_eq(
                 data["POA"], params_modulo, params_cec_sam
             )
-
-            df_cec = pd.DataFrame(parametros_circuito_eq)
-            df_cec = df_cec.transpose()
-            df_cec.columns = [
-                "photocurrent",
-                "saturation_current",
-                "resistance_series",
-                "resistance_shunt",
-                "nNsVth",
-            ]
-
+            
+            df_cec = pd.DataFrame(
+                parametros_circuito_eq, 
+                index=["photocurrent", "saturation_current", "resistance_series", "resistance_shunt", "nNsVth"]
+            ).transpose()
             data["params_cec"] = df_cec
+
 
     @capturar_excepciones(
         MensajesSolar.Estado.CIRCUITO_EQUIVALENTE.value,
@@ -383,6 +417,7 @@ class ServicioSolar:
         """
         for data in self.inversores_resultados.values():
             solucion_cec = obtener_solucion_circuito_eq(data["params_cec"])
+
             df = pd.DataFrame(
                 {
                     "i_sc": solucion_cec["i_sc"],
@@ -395,7 +430,10 @@ class ServicioSolar:
                 }
             )
             df.index = data["POA"].index
+
+            df.index = data["POA"].index
             data["solucion_cec"] = df
+
 
     def ejecutar_calculo_dc_ac(
         self,
@@ -468,7 +506,7 @@ class ServicioSolar:
         energia_firme = min(valor_minimo_diario, energia_calculada)
         # En caso de que la planta NO cuente con información medida
         if not params_trans.InformacionMedida:
-            energia_firme = valor_minimo_diario * 0.6
+            energia_firme = valor_minimo_diario * 0.8
 
         resultado = Resultado(
             anio=int(fecha_minimo_diario.year),

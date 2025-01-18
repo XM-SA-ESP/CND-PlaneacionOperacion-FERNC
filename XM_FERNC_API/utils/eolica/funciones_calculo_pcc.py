@@ -1,8 +1,8 @@
 from typing import List, Dict
-from infraestructura.models.eolica.parametros import JsonModelEolica
-from utils.eolica.distancia import distancia_geodesica
+from XM_FERNC_API.infraestructura.models.eolica.parametros import JsonModelEolica
+from XM_FERNC_API.utils.eolica.distancia import distancia_geodesica
 
-from utils.eolica.dataclasses_eolica import Aerogenerador
+from XM_FERNC_API.utils.eolica.dataclasses_eolica import Aerogenerador
 
 
 class CalculoPcc:
